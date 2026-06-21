@@ -4,6 +4,7 @@ import json
 import os
 import random
 import re
+import requests
 from datetime import date
 from openai import OpenAI
 
@@ -128,7 +129,7 @@ with st.sidebar:
         st.rerun()
     st.markdown("---")
 
-# --- SKOTTSÄKER KAMELEON-LÖSNING FÖR API-NYCKEL ---
+# --- KAMELEON-LÖSNING FÖR API-NYCKEL ---
 api_key = None
 try:
     if "OPENROUTER_API_KEY" in st.secrets:
@@ -141,20 +142,44 @@ if not api_key:
         with open("openrouter_nyckel.txt", "r", encoding="utf-8") as f:
             api_key = f.read().strip()
     else:
-        st.error("Systemfel: Hittar inte API-nyckeln. Kontrollera att filen eller secrets finns.")
+        st.error("Systemfel: Hittar inte API-nyckeln.")
         st.stop()
 
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
 
+# --- SMART NERLADDNING AV DATABASEN ---
 @st.cache_data
 def ladda_bibliotek():
+    # 1. Försök ladda lokalt först (om filen ligger på datorn)
     if os.path.exists(FILNAMN):
         try:
             with open(FILNAMN, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
-            return []
-    return []
+            pass
+            
+    # 2. Om den inte finns lokalt (t.ex. på Streamlit Cloud), hämta från Google Drive
+    file_id = '1Adzla1qniutzJvN8LTM1hiWRBBpxC9lu'
+    url = "https://docs.google.com/uc?export=download"
+    
+    try:
+        session = requests.Session()
+        response = session.get(url, params={'id': file_id}, stream=True)
+        
+        # Förbikoppling av Googles virusvarnings-sida för stora filer
+        token = None
+        for key, value in response.cookies.items():
+            if key.startswith('download_warning'):
+                token = value
+                break
+        
+        if token:
+            params = {'id': file_id, 'confirm': token}
+            response = session.get(url, params=params, stream=True)
+            
+        return response.json()
+    except Exception:
+        return []
 
 noveller = ladda_bibliotek()
 
@@ -186,7 +211,6 @@ user_input = None
 
 if len(st.session_state.chat_history) == 0:
     st.write("Beskriv en scen, en stämning eller en karaktär nedan för att påbörja berättelsen.")
-    # FIX 1: Tog bort clear_on_submit=True så att texten sparas om man fastnar i filtret
     with st.form(key="start_scen_form"):
         user_input_raw = st.text_area(
             "Vad vill du skriva om?", 
@@ -296,11 +320,9 @@ if user_input:
                     anvandar_db[aktiv_anvandare]["anvanda_idag"] += 1
                     spara_anvandare(anvandar_db)
                     
-                    # FIX 3: Tvinga omladdning när API-anropet är klart och sparat
                     st.rerun()
                     
                 except Exception as e:
-                    # Rensar bort användarens prompt från historiken om AI:n kraschade
                     st.session_state.chat_history.pop()
                     if DEV_MODE:
                         st.error(f"API-fel: {e}")
