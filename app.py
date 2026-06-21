@@ -4,7 +4,7 @@ import json
 import os
 import random
 import re
-import requests
+import gdown
 from datetime import date
 from openai import OpenAI
 
@@ -147,39 +147,25 @@ if not api_key:
 
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
 
-# --- SMART NERLADDNING AV DATABASEN ---
+# --- SMART NERLADDNING AV DATABASEN (MED GDOWN) ---
 @st.cache_data
 def ladda_bibliotek():
-    # 1. Försök ladda lokalt först (om filen ligger på datorn)
+    # 1. Försök ladda ner filen från Google Drive om den inte finns
+    if not os.path.exists(FILNAMN):
+        file_id = '1Adzla1qniutzJvN8LTM1hiWRBBpxC9lu'
+        try:
+            gdown.download(id=file_id, output=FILNAMN, quiet=False)
+        except Exception:
+            pass
+            
+    # 2. Läs in filen till minnet
     if os.path.exists(FILNAMN):
         try:
             with open(FILNAMN, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
-            pass
-            
-    # 2. Om den inte finns lokalt (t.ex. på Streamlit Cloud), hämta från Google Drive
-    file_id = '1Adzla1qniutzJvN8LTM1hiWRBBpxC9lu'
-    url = "https://docs.google.com/uc?export=download"
-    
-    try:
-        session = requests.Session()
-        response = session.get(url, params={'id': file_id}, stream=True)
-        
-        # Förbikoppling av Googles virusvarnings-sida för stora filer
-        token = None
-        for key, value in response.cookies.items():
-            if key.startswith('download_warning'):
-                token = value
-                break
-        
-        if token:
-            params = {'id': file_id, 'confirm': token}
-            response = session.get(url, params=params, stream=True)
-            
-        return response.json()
-    except Exception:
-        return []
+            return []
+    return []
 
 noveller = ladda_bibliotek()
 
