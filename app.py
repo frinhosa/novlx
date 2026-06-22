@@ -11,7 +11,7 @@ from datetime import date
 from openai import OpenAI
 
 # Sätter en renare och mer minimalistisk sidlayout
-st.set_page_config(layout="centered", page_title="novlx", page_icon="💋")
+st.set_page_config(layout="centered", page_title="6novl", page_icon="💋")
 
 # --- INSTÄLLNINGAR ---
 DEV_MODE = True
@@ -70,7 +70,7 @@ if "inloggad_anvandare" not in st.session_state:
     st.session_state.inloggad_anvandare = None
 
 if st.session_state.inloggad_anvandare is None:
-    st.title("novlx 💋")
+    st.title("6novl 💋")
     st.write("Logga in eller skapa konto för att komma åt studion.")
     
     tab1, tab2 = st.tabs(["Logga in", "Skapa konto"])
@@ -92,7 +92,9 @@ if st.session_state.inloggad_anvandare is None:
         ny_anvandare = st.text_input("Välj användarnamn", key="reg_user").strip().lower()
         nytt_losenord = st.text_input("Välj lösenord", type="password", key="reg_pass")
         if st.button("Skapa konto"):
-            if ny_anvandare in anvandar_db:
+            if not ny_anvandare or not nytt_losenord:
+                st.warning("Fyll i både användarnamn och lösenord.")
+            elif ny_anvandare in anvandar_db:
                 st.error("Användarnamnet är upptaget.")
             else:
                 anvandar_db[ny_anvandare] = {
@@ -187,7 +189,7 @@ def ladda_bibliotek():
 noveller = ladda_bibliotek()
 
 # --- 6. DESIGN: HUVUDAPPEN ---
-st.title("novlx 💋")
+st.title("6novl 💋")
 st.markdown("<p style='font-style: italic; color: #888;'>Den interaktiva skrivarstudion för vuxenlitteratur.</p>", unsafe_allow_html=True)
 
 if "chat_history" not in st.session_state:
@@ -229,12 +231,11 @@ else:
     placeholder = "Skriv 'mer' eller 'fortsätt' för att förlänga, eller styr handlingen fritt..."
     user_input = st.chat_input(placeholder)
 
-# --- STIL-MATCHNINGS MOTOR (TRIMMAD OCH LAGAD) ---
+# --- STIL-MATCHNINGS MOTOR ---
 def hitta_stil_referens(user_prompt):
     if not noveller:
         return "", None
     try:
-        # Filtrera bort korta ord och vanliga utfyllnadsord
         stoppord = ["eller", "lite", "bara", "kanske", "också", "skriva", "gärna", "mycket", "något", "någon", "denna", "detta", "över", "vill", "till", "från", "inte", "utan", "vara"]
         sokord = [ord.lower() for ord in user_prompt.split() if len(ord) > 3 and ord.lower() not in stoppord]
         
@@ -253,16 +254,10 @@ def hitta_stil_referens(user_prompt):
                 traffar.append((match_poang, n))
         
         if traffar:
-            # 1. Blanda listan FÖRST. Om många noveller får 1 poäng bryts oavgjort helt slumpmässigt!
             random.shuffle(traffar)
-            # 2. Sortera sedan så de med högst poäng hamnar i toppen.
             traffar.sort(key=lambda x: x[0], reverse=True)
-            
-            # 3. Bredda urvalet: Lottdragning bland de 15 bästa träffarna istället för bara de 3 bästa.
             urval = traffar[:15]
             vinnare_poang, topp_val = random.choice(urval)
-            
-            # Hämta rätt titel från det valda dokumentet (här låg buggen förut!)
             vinnare_titel = topp_val.get("title", "Okänd titel")
             text_snutt = topp_val.get("text", "")[:2000]
             
@@ -275,15 +270,10 @@ def hitta_stil_referens(user_prompt):
 
 # --- GENERERINGS-LOGIK ---
 if user_input:
-    # 1. KONTROLLERA INNEHÅLLET
     if not ar_innehall_tillatet(user_input):
         st.error("🛑 Din text innehåller ord eller teman som bryter mot appens riktlinjer. Vänligen justera din beskrivning.")
-    
-    # 2. KONTROLLERA KVOTEN
     elif anvanda_tokens >= max_kvot:
         st.error("🛑 Du har nått din gräns för skapande idag. Kom tillbaka imorgon!")
-    
-    # 3. KÖR VIDARE
     else:
         kommando = user_input.strip().lower()
         ar_fortsattning = kommando in ["fortsätt", "mer", "vidare", ".", "..", "..."] and len(st.session_state.chat_history) > 0
@@ -335,10 +325,8 @@ if user_input:
                     
                     st.write(ai_response)
                     st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
-                    
                     anvandar_db[aktiv_anvandare]["anvanda_idag"] += 1
                     spara_anvandare(anvandar_db)
-                    
                     st.rerun()
                     
                 except Exception as e:
