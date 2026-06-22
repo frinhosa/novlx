@@ -7,6 +7,7 @@ import re
 import zipfile
 import urllib.request
 import shutil
+import requests
 from datetime import date
 from openai import OpenAI
 
@@ -34,6 +35,19 @@ def ar_innehall_tillatet(prompt_text):
             return False
     return True
 
+# --- TELEGRAM NOTISER ---
+def skicka_telegram_notis(ny_anvandare):
+    try:
+        if "TELEGRAM_BOT_TOKEN" in st.secrets and "TELEGRAM_CHAT_ID" in st.secrets:
+            bot_token = st.secrets["TELEGRAM_BOT_TOKEN"]
+            chat_id = st.secrets["TELEGRAM_CHAT_ID"]
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            meddelande = f"🚨 Ny användare i 6novl!\n\nAnvändarnamn: '{ny_anvandare}' väntar på ditt godkännande."
+            
+            requests.post(url, json={"chat_id": chat_id, "text": meddelande})
+    except Exception:
+        pass # Ignorerar tyst om nätverket strular
+
 # --- 1. DATABAS FÖR ANVÄNDARE (MED SJÄLV-REPARATION) ---
 def ladda_anvandare():
     if not os.path.exists(ANVANDAR_FIL):
@@ -45,11 +59,9 @@ def ladda_anvandare():
             except:
                 data = {}
                 
-    # FIX: Återskapa admin om profilen saknas
     if "admin" not in data:
         data["admin"] = {"max_kvot": 100, "anvanda_idag": 0, "senaste_datum": str(date.today()), "godkand": True}
         
-    # SÄKERHET: Radera gamla lösenord om de finns kvar
     if "admin" in data and "losenord" in data["admin"]:
         del data["admin"]["losenord"]
         
@@ -113,8 +125,10 @@ if st.session_state.inloggad_anvandare is None:
                 }
                 spara_anvandare(anvandar_db)
                 st.success("Konto skapat! Väntar på godkännande av admin.")
+                skicka_telegram_notis(ny_anvandare)
     st.stop()
 
+# --- 3. ANVÄNDAREN ÄR INLOGGAD ---
 aktiv_anvandare = st.session_state.inloggad_anvandare
 dagens_datum = str(date.today())
 
@@ -126,6 +140,7 @@ if anvandar_db[aktiv_anvandare]["senaste_datum"] != dagens_datum:
 anvanda_tokens = anvandar_db[aktiv_anvandare]["anvanda_idag"]
 max_kvot = anvandar_db[aktiv_anvandare]["max_kvot"]
 
+# --- 4. ADMINISTRATÖR & SIDOMENY ---
 with st.sidebar:
     st.subheader(f"👤 {aktiv_anvandare.capitalize()}")
     if aktiv_anvandare == "admin":
@@ -149,6 +164,7 @@ with st.sidebar:
     st.markdown("---")
     st.caption("📧 Kontakt: 6novl@proton.me")
 
+# --- KAMELEON-LÖSNING FÖR API-NYCKEL ---
 api_key = None
 try:
     if "OPENROUTER_API_KEY" in st.secrets:
@@ -166,6 +182,7 @@ if not api_key:
 
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
 
+# --- 5. SMART NERLADDNING (GITHUB RELEASES) ---
 @st.cache_data
 def ladda_och_parsa_fil():
     if not os.path.exists(FILNAMN):
@@ -177,6 +194,7 @@ def ladda_och_parsa_fil():
                 zip_ref.extractall(".")
         except Exception as e:
             raise Exception(f"Kunde inte ladda ner/packa upp: {e}")
+    
     if os.path.exists(FILNAMN):
         with open(FILNAMN, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -190,75 +208,106 @@ def ladda_bibliotek():
         return []
 
 noveller = ladda_bibliotek()
+
+# --- 6. DESIGN: HUVUDAPPEN ---
 st.title("6novl 💋")
 st.markdown("<p style='font-style: italic; color: #888;'>Den interaktiva skrivarstudion för vuxenlitteratur.</p>", unsafe_allow_html=True)
 
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+# --- UTVECKLARVERKTYG FÖR ADMIN ---
 if DEV_MODE and aktiv_anvandare == "admin":
     with st.sidebar:
         st.subheader("🛠️ Utvecklarverktyg")
         st.info(f"Databas laddad: {len(noveller)} noveller")
+        if "debug_info" in st.session_state:
+            st.markdown("### 🎯 Matchning:")
+            st.write(f"**Titel:** {st.session_state.debug_info['titel']}")
+            st.write(f"**Poäng:** {st.session_state.debug_info['poang']}")
+        if "senaste_referens" in st.session_state:
+            st.caption("Utdrag till AI:")
+            st.code(st.session_state.senaste_referens[:150] + "...", language="text")
 
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
+# --- DYNAMISKT TEXTFÄLT (FLIPP-FLOPP) ---
 user_input = None
+
 if len(st.session_state.chat_history) == 0:
     st.write("Beskriv en scen, en stämning eller en karaktär nedan för att påbörja berättelsen.")
     with st.form(key="start_scen_form"):
-        user_input_raw = st.text_area("Vad vill du skriva om?", placeholder="Beskriv din vision...", height=150, label_visibility="collapsed")
-        if st.form_submit_button("Påbörja berättelsen 💋") and user_input_raw.strip():
+        user_input_raw = st.text_area(
+            "Vad vill du skriva om?", 
+            placeholder="Beskriv din vision (t.ex. 'Ett intensivt och oväntat möte i ett regnigt Stockholm')...",
+            height=150,
+            label_visibility="collapsed"
+        )
+        skapa_knapp = st.form_submit_button("Påbörja berättelsen 💋")
+        if skapa_knapp and user_input_raw.strip():
             user_input = user_input_raw.strip()
 else:
-    user_input = st.chat_input("Skriv 'mer' eller 'fortsätt' för att förlänga...")
+    placeholder = "Skriv 'mer' eller 'fortsätt' för att förlänga, eller styr handlingen fritt..."
+    user_input = st.chat_input(placeholder)
 
+# --- STIL-MATCHNINGS MOTOR ---
 def hitta_stil_referens(user_prompt):
-    if not noveller: return "", None
+    if not noveller:
+        return "", None
     try:
-        sokord = [ord.lower() for ord in user_prompt.split() if len(ord) > 3]
+        stoppord = ["eller", "lite", "bara", "kanske", "också", "skriva", "gärna", "mycket", "något", "någon", "denna", "detta", "över", "vill", "till", "från", "inte", "utan", "vara"]
+        sokord = [ord.lower() for ord in user_prompt.split() if len(ord) > 3 and ord.lower() not in stoppord]
+        
         traffar = []
         for n in noveller:
-            metadata = f"{n.get('title', '')} {n.get('analys', {}).get('genre', '')}".lower()
+            analys = n.get("analys", {})
+            titel = n.get("title", "Okänd titel")
+            genre = analys.get("genre", "") or ""
+            raw_tags = analys.get("tags")
+            tags = raw_tags if isinstance(raw_tags, list) else []
+            sammanfattning = analys.get("summary", "") or ""
+            
+            metadata = f"{titel} {genre} {' '.join(tags)} {sammanfattning}".lower()
             match_poang = sum(1 for ord in sokord if ord in metadata)
-            if match_poang > 0: traffar.append((match_poang, n))
+            if match_poang > 0:
+                traffar.append((match_poang, n))
+        
         if traffar:
             random.shuffle(traffar)
             traffar.sort(key=lambda x: x[0], reverse=True)
-            topp_val = random.choice(traffar[:15])[1]
-            return f"\n\n[SYSTEM: Inspireras av denna stil:\n{topp_val.get('text', '')[:2000]}...]", {"titel": topp_val.get("title")}
-    except: return "", None
+            urval = traffar[:15]
+            vinnare_poang, topp_val = random.choice(urval)
+            vinnare_titel = topp_val.get("title", "Okänd titel")
+            text_snutt = topp_val.get("text", "")[:2000]
+            
+            referens = f"\n\n[SYSTEM-NOTERING: Inspireras av denna stil och ton:\n{text_snutt}...]"
+            debug_info = {"titel": vinnare_titel, "poang": vinnare_poang}
+            return referens, debug_info
+    except Exception:
+        return "", None
     return "", None
 
+# --- GENERERINGS-LOGIK ---
 if user_input:
     if not ar_innehall_tillatet(user_input):
-        st.error("🛑 Innehållet bryter mot riktlinjerna.")
+        st.error("🛑 Din text innehåller ord eller teman som bryter mot appens riktlinjer. Vänligen justera din beskrivning.")
     elif anvanda_tokens >= max_kvot:
-        st.error("🛑 Gränsen nådd för idag.")
+        st.error("🛑 Du har nått din gräns för skapande idag. Kom tillbaka imorgon!")
     else:
+        kommando = user_input.strip().lower()
+        ar_fortsattning = kommando in ["fortsätt", "mer", "vidare", ".", "..", "..."] and len(st.session_state.chat_history) > 0
+        
+        with st.chat_message("user"):
+            st.write(user_input)
+            
         st.session_state.chat_history.append({"role": "user", "content": user_input})
-        with st.chat_message("user"): st.write(user_input)
         
-        system_prompt = "Du är en skicklig författare av vuxenlitteratur på svenska. Svara enbart med berättelsen."
+        referens_text = ""
+        status_meddelande = "Formar nästa del..." if ar_fortsattning else "Formar texten..."
+        
         if len(st.session_state.chat_history) == 1:
-            ref, _ = hitta_stil_referens(user_input)
-            system_prompt += ref
-        
-        with st.chat_message("assistant"):
-            with st.spinner("Formar texten..."):
-                try:
-                    response = client.chat.completions.create(model="deepseek/deepseek-chat", messages=[{"role": "system", "content": system_prompt}] + st.session_state.chat_history, max_tokens=4000)
-                    ai_response = response.choices[0].message.content
-                    st.write(ai_response)
-                    st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
-                    anvandar_db[aktiv_anvandare]["anvanda_idag"] += 1
-                    spara_anvandare(anvandar_db)
-                    st.rerun()
-                except Exception as e: 
-                    st.error("Ett fel uppstod vid genereringen. Försök igen.")
-
-if st.sidebar.button("🗑️ Starta ny session"):
-    st.session_state.chat_history = []
-    st.rerun()
+            status_meddelande = "Etablerar ton och atmosfär..."
+            referens_text, debug_info = hitta_stil_referens(user_input)
+            if DEV_MODE and debug_info:
