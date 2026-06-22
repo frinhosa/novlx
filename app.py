@@ -47,11 +47,17 @@ def ar_innehall_tillatet(prompt_text):
 def ladda_anvandare():
     if not os.path.exists(ANVANDAR_FIL):
         data = {
-            "admin": {"losenord": "novlx2026", "max_kvot": 100, "anvanda_idag": 0, "senaste_datum": str(date.today()), "godkand": True}
+            # SÄKERHETSUPPDATERING: Lösenordet sparas inte längre här.
+            "admin": {"max_kvot": 100, "anvanda_idag": 0, "senaste_datum": str(date.today()), "godkand": True}
         }
     else:
         with open(ANVANDAR_FIL, "r", encoding="utf-8") as f:
             data = json.load(f)
+            
+        # SÄKERHETSUPPDATERING: Om det gamla lösenordet ligger kvar i filen, raderar vi det automatiskt.
+        if "admin" in data and "losenord" in data["admin"]:
+            del data["admin"]["losenord"]
+            
         if "admin" in data and "godkand" not in data["admin"]:
             data["admin"]["godkand"] = True
             
@@ -79,7 +85,15 @@ if st.session_state.inloggad_anvandare is None:
         anvandarnamn = st.text_input("Användarnamn", key="login_user").strip().lower()
         losenord = st.text_input("Lösenord", type="password", key="login_pass")
         if st.button("Logga in"):
-            if anvandarnamn in anvandar_db and anvandar_db[anvandarnamn]["losenord"] == losenord:
+            # SÄKERHETSUPPDATERING: Admin loggas in via Streamlit Secrets
+            if anvandarnamn == "admin":
+                if "ADMIN_PASSWORD" in st.secrets and losenord == st.secrets["ADMIN_PASSWORD"]:
+                    st.session_state.inloggad_anvandare = "admin"
+                    st.rerun()
+                else:
+                    st.error("Fel administratörslösenord.")
+            # Vanliga användare loggas in via databasen
+            elif anvandarnamn in anvandar_db and anvandar_db[anvandarnamn].get("losenord") == losenord:
                 if anvandar_db[anvandarnamn].get("godkand", False):
                     st.session_state.inloggad_anvandare = anvandarnamn
                     st.rerun()
@@ -94,7 +108,7 @@ if st.session_state.inloggad_anvandare is None:
         if st.button("Skapa konto"):
             if not ny_anvandare or not nytt_losenord:
                 st.warning("Fyll i både användarnamn och lösenord.")
-            elif ny_anvandare in anvandar_db:
+            elif ny_anvandare == "admin" or ny_anvandare in anvandar_db:
                 st.error("Användarnamnet är upptaget.")
             else:
                 anvandar_db[ny_anvandare] = {
