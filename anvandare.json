@@ -1,14 +1,1 @@
-{
-    "admin": {
-        "losenord": "novlx2026",
-        "max_kvot": 100,
-        "anvanda_idag": 1,
-        "senaste_datum": "2026-06-21"
-    },
-    "gast": {
-        "losenord": "test123",
-        "max_kvot": 20,
-        "anvanda_idag": 0,
-        "senaste_datum": "2026-06-21"
-    }
-}
+{}
