@@ -147,6 +147,7 @@ with st.sidebar:
         st.session_state.chat_history = []
         st.rerun()
     st.markdown("---")
+    st.caption("📧 Kontakt: 6novl@proton.me")
 
 api_key = None
 try:
@@ -255,7 +256,8 @@ if user_input:
                     anvandar_db[aktiv_anvandare]["anvanda_idag"] += 1
                     spara_anvandare(anvandar_db)
                     st.rerun()
-                except: st.error("Ett fel uppstod.")
+                except Exception as e: 
+                    st.error("Ett fel uppstod vid genereringen. Försök igen.")
 
 if st.sidebar.button("🗑️ Starta ny session"):
     st.session_state.chat_history = []
