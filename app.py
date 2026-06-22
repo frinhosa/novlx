@@ -4,7 +4,8 @@ import json
 import os
 import random
 import re
-import gdown
+import zipfile
+import urllib.request
 from datetime import date
 from openai import OpenAI
 
@@ -14,6 +15,8 @@ st.set_page_config(layout="centered", page_title="novlx", page_icon="💋")
 # --- INSTÄLLNINGAR ---
 DEV_MODE = True
 FILNAMN = "kategoriserade_berattelser.json"
+ZIP_FILNAMN = "kategoriserade_berattelser.zip"
+ZIP_URL = "https://github.com/frinhosa/novlx/releases/download/1.0/kategoriserade_berattelser.zip"
 ANVANDAR_FIL = "anvandare.json"
 
 # --- INNEHÅLLSFILTER (SVARTLISTA) ---
@@ -147,35 +150,39 @@ if not api_key:
 
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
 
-# --- SMART NERLADDNING AV DATABASEN (MED SJÄLVRENSNING) ---
+# --- SMART NERLADDNING AV DATABASEN (VIA GITHUB RELEASES) ---
 @st.cache_data
 def ladda_och_parsa_fil():
-    # 1. Ladda ner filen från Google Drive om den inte finns
+    # 1. Om filen saknas lokalt på servern, ladda ner zip-filen från GitHub och packa upp
     if not os.path.exists(FILNAMN):
-        file_id = '1Adzla1qniutzJvN8LTM1hiWRBBpxC9lu'
-        # Använder id= för att garantera att gamla gdown-versioner förstår vad vi menar
-        gdown.download(id=file_id, output=FILNAMN, quiet=False)
+        try:
+            # Ladda ner
+            urllib.request.urlretrieve(ZIP_URL, ZIP_FILNAMN)
+            # Packa upp
+            with zipfile.ZipFile(ZIP_FILNAMN, 'r') as zip_ref:
+                zip_ref.extractall(".")
+        except Exception as e:
+            raise Exception(f"Kunde inte ladda ner eller packa upp zip-filen: {e}")
     
-    # 2. Försök läsa in den hämtade filen
+    # 2. Försök läsa in den uppackade filen
     if os.path.exists(FILNAMN):
         try:
             with open(FILNAMN, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return data
         except json.JSONDecodeError as e:
-            # KRITISKT: Om filen är korrupt (t.ex. en HTML-varning från Google), radera den!
-            # Annars kommer appen tro att den är klar och misslyckas för alltid.
+            # Ta bort filen om den blev korrupt så att vi kan försöka igen nästa gång
             os.remove(FILNAMN)
-            raise ValueError(f"Nedladdad fil var inte en giltig JSON och raderades. Detaljer: {e}")
+            raise ValueError(f"Uppackad fil var inte en giltig JSON och raderades. Detaljer: {e}")
     else:
-        raise FileNotFoundError("gdown misslyckades med att skapa filen på servern.")
+        raise FileNotFoundError("Packade upp zip-filen framgångsrikt, men hittade ingen fil inuti som hette 'kategoriserade_berattelser.json'.")
 
 def ladda_bibliotek():
     try:
         # Om detta lyckas sparas resultatet i Streamlits blixtsnabba minne
         return ladda_och_parsa_fil()
     except Exception as e:
-        # Om det blir fel visar vi felet rött på skärmen så vi vet exakt vad som hände
+        # Visar felet rött på skärmen om något går snett
         st.error(f"🚨 Databasfel: {e}")
         return []
 
