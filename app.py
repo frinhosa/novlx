@@ -22,21 +22,16 @@ ANVANDAR_FIL = "anvandare.json"
 
 # --- 1. DATABAS FÖR ANVÄNDARE (MED SJÄLV-REPARATION) ---
 def ladda_anvandare():
-    # Om filen inte finns, skapa den
     if not os.path.exists(ANVANDAR_FIL):
         data = {
             "admin": {"losenord": "novlx2026", "max_kvot": 100, "anvanda_idag": 0, "senaste_datum": str(date.today()), "godkand": True}
         }
     else:
-        # Om den finns, läs in
         with open(ANVANDAR_FIL, "r", encoding="utf-8") as f:
             data = json.load(f)
-        
-        # Säkerhetsfix: Se till att admin alltid är godkänd om den saknar inställningen
         if "admin" in data and "godkand" not in data["admin"]:
             data["admin"]["godkand"] = True
             
-    # Spara alltid ner det senaste formatet
     with open(ANVANDAR_FIL, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
     return data
@@ -52,7 +47,7 @@ if "inloggad_anvandare" not in st.session_state:
     st.session_state.inloggad_anvandare = None
 
 if st.session_state.inloggad_anvandare is None:
-    st.title("novlx")
+    st.title("novlx 💋")
     st.write("Logga in eller skapa konto för att komma åt studion.")
     
     tab1, tab2 = st.tabs(["Logga in", "Skapa konto"])
@@ -148,7 +143,7 @@ client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=st.secrets.get(
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-st.title("novlx")
+st.title("novlx 💋")
 
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
