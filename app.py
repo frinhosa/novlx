@@ -6,6 +6,7 @@ import random
 import re
 import zipfile
 import urllib.request
+import shutil
 from datetime import date
 from openai import OpenAI
 
@@ -150,15 +151,18 @@ if not api_key:
 
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
 
-# --- SMART NERLADDNING AV DATABASEN (VIA GITHUB RELEASES) ---
+# --- SMART NERLADDNING AV DATABASEN (VIA GITHUB RELEASES MED FÖRKLÄDNAD) ---
 @st.cache_data
 def ladda_och_parsa_fil():
-    # 1. Om filen saknas lokalt på servern, ladda ner zip-filen från GitHub och packa upp
+    # 1. Ladda ner zip-filen och lura robot-skyddet
     if not os.path.exists(FILNAMN):
         try:
-            # Ladda ner
-            urllib.request.urlretrieve(ZIP_URL, ZIP_FILNAMN)
-            # Packa upp
+            # Vi klär ut appen till Google Chrome!
+            req = urllib.request.Request(ZIP_URL, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
+            with urllib.request.urlopen(req) as response, open(ZIP_FILNAMN, 'wb') as out_file:
+                shutil.copyfileobj(response, out_file)
+                
+            # Packa upp den
             with zipfile.ZipFile(ZIP_FILNAMN, 'r') as zip_ref:
                 zip_ref.extractall(".")
         except Exception as e:
@@ -171,18 +175,15 @@ def ladda_och_parsa_fil():
                 data = json.load(f)
                 return data
         except json.JSONDecodeError as e:
-            # Ta bort filen om den blev korrupt så att vi kan försöka igen nästa gång
             os.remove(FILNAMN)
             raise ValueError(f"Uppackad fil var inte en giltig JSON och raderades. Detaljer: {e}")
     else:
-        raise FileNotFoundError("Packade upp zip-filen framgångsrikt, men hittade ingen fil inuti som hette 'kategoriserade_berattelser.json'.")
+        raise FileNotFoundError("Packade upp zip-filen, men hittade ingen fil inuti som hette exakt 'kategoriserade_berattelser.json'.")
 
 def ladda_bibliotek():
     try:
-        # Om detta lyckas sparas resultatet i Streamlits blixtsnabba minne
         return ladda_och_parsa_fil()
     except Exception as e:
-        # Visar felet rött på skärmen om något går snett
         st.error(f"🚨 Databasfel: {e}")
         return []
 
