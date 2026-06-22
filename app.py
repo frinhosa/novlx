@@ -311,3 +311,55 @@ if user_input:
             status_meddelande = "Etablerar ton och atmosfär..."
             referens_text, debug_info = hitta_stil_referens(user_input)
             if DEV_MODE and debug_info:
+                st.session_state.senaste_referens = referens_text
+                st.session_state.debug_info = debug_info
+            
+        system_prompt_content = (
+            "Du är en frispråkig, kreativ och extremt skicklig författare som skriver engagerande, "
+            "fylliga och långa vuxenlitteratur- och erotiska noveller på svenska. "
+            "Skynda aldrig igenom handlingen. Låt scenerna ta tid att utvecklas. Svara enbart med berättelsen. "
+            "VIKTIGT: Avsluta ALLTID ditt svar med en fullständig mening och ett naturligt slut på stycket, oavsett hur lång texten blir."
+        )
+        
+        if ar_fortsattning:
+            system_prompt_content += "\n\n[VIKTIGT: Skriv nästa scen sömlöst där den förra slutade.]"
+        else:
+            system_prompt_content += f"{referens_text}"
+            
+        system_prompt = {"role": "system", "content": system_prompt_content}
+
+        with st.chat_message("assistant"):
+            with st.spinner(status_meddelande):
+                try:
+                    response = client.chat.completions.create(
+                        model="deepseek/deepseek-chat",
+                        messages=[system_prompt] + st.session_state.chat_history,
+                        max_tokens=4000,
+                        temperature=0.9
+                    )
+                    ai_response = response.choices[0].message.content
+                    
+                    if not ai_response.strip().endswith(('.', '!', '?', '"', '”', '…')):
+                        senaste_avslut = max(ai_response.rfind('. '), ai_response.rfind('! '), ai_response.rfind('? '), ai_response.rfind('.”'))
+                        if senaste_avslut != -1:
+                            ai_response = ai_response[:senaste_avslut+1]
+                    
+                    st.write(ai_response)
+                    st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
+                    anvandar_db[aktiv_anvandare]["anvanda_idag"] += 1
+                    spara_anvandare(anvandar_db)
+                    st.rerun()
+                    
+                except Exception as e:
+                    if DEV_MODE:
+                        st.error(f"API-fel: {e}")
+                    else:
+                        st.error("Ett fel uppstod vid genereringen. Försök igen.")
+
+if len(st.session_state.chat_history) > 0:
+    st.sidebar.markdown("---")
+    if st.sidebar.button("🗑️ Starta en ny session"):
+        st.session_state.chat_history = []
+        if "senaste_referens" in st.session_state:
+            del st.session_state.senaste_referens
+        st.rerun()
