@@ -147,25 +147,28 @@ if not api_key:
 
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
 
-# --- SMART NERLADDNING AV DATABASEN (MED GDOWN) ---
-@st.cache_data
+# --- SMART NERLADDNING AV DATABASEN (MED GDOWN OCH FELSÖKNING) ---
+# Vi stänger tillfälligt av @st.cache_data så att den tvingas försöka igen vid varje omladdning
 def ladda_bibliotek():
-    # 1. Försök ladda ner filen från Google Drive om den inte finns
     if not os.path.exists(FILNAMN):
         file_id = '1Adzla1qniutzJvN8LTM1hiWRBBpxC9lu'
         try:
-            gdown.download(id=file_id, output=FILNAMN, quiet=False)
-        except Exception:
-            pass
+            # fuzzy=True hjälper till att kringgå Google Drives varningssidor för stora filer
+            gdown.download(id=file_id, output=FILNAMN, quiet=False, fuzzy=True)
+        except Exception as e:
+            st.error(f"🚨 Nerladdningsfel från Google Drive: {e}")
+            return []
             
-    # 2. Läs in filen till minnet
     if os.path.exists(FILNAMN):
         try:
             with open(FILNAMN, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
+        except Exception as e:
+            st.error(f"🚨 Filen laddades ner, men kunde inte läsas (JSON-fel): {e}")
             return []
-    return []
+    else:
+        st.error("🚨 Gdown kördes, men ingen fil skapades på servern.")
+        return []
 
 noveller = ladda_bibliotek()
 
@@ -301,24 +304,4 @@ if user_input:
                             ai_response = ai_response[:senaste_avslut+1]
                     
                     st.write(ai_response)
-                    st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
-                    
-                    anvandar_db[aktiv_anvandare]["anvanda_idag"] += 1
-                    spara_anvandare(anvandar_db)
-                    
-                    st.rerun()
-                    
-                except Exception as e:
-                    st.session_state.chat_history.pop()
-                    if DEV_MODE:
-                        st.error(f"API-fel: {e}")
-                    else:
-                        st.error("Ett tillfälligt fel uppstod. Försök igen.")
-
-if len(st.session_state.chat_history) > 0:
-    st.sidebar.markdown("---")
-    if st.sidebar.button("🗑️ Starta en ny session"):
-        st.session_state.chat_history = []
-        if "senaste_referens" in st.session_state:
-            del st.session_state.senaste_referens
-        st.rerun()
+                    st.session_state.
