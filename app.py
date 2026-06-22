@@ -20,17 +20,26 @@ ZIP_FILNAMN = "kategoriserade_berattelser.zip"
 ZIP_URL = "https://github.com/frinhosa/novlx/releases/download/1.0/kategoriserade_berattelser.zip"
 ANVANDAR_FIL = "anvandare.json"
 
-# --- 1. DATABAS FÖR ANVÄNDARE ---
+# --- 1. DATABAS FÖR ANVÄNDARE (MED SJÄLV-REPARATION) ---
 def ladda_anvandare():
+    # Om filen inte finns, skapa den
     if not os.path.exists(ANVANDAR_FIL):
-        standard_data = {
+        data = {
             "admin": {"losenord": "novlx2026", "max_kvot": 100, "anvanda_idag": 0, "senaste_datum": str(date.today()), "godkand": True}
         }
-        with open(ANVANDAR_FIL, "w", encoding="utf-8") as f:
-            json.dump(standard_data, f, indent=4)
-        return standard_data
-    with open(ANVANDAR_FIL, "r", encoding="utf-8") as f:
-        return json.load(f)
+    else:
+        # Om den finns, läs in
+        with open(ANVANDAR_FIL, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        # Säkerhetsfix: Se till att admin alltid är godkänd om den saknar inställningen
+        if "admin" in data and "godkand" not in data["admin"]:
+            data["admin"]["godkand"] = True
+            
+    # Spara alltid ner det senaste formatet
+    with open(ANVANDAR_FIL, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+    return data
 
 def spara_anvandare(data):
     with open(ANVANDAR_FIL, "w", encoding="utf-8") as f:
@@ -43,7 +52,7 @@ if "inloggad_anvandare" not in st.session_state:
     st.session_state.inloggad_anvandare = None
 
 if st.session_state.inloggad_anvandare is None:
-    st.title("novlx 💋")
+    st.title("novlx")
     st.write("Logga in eller skapa konto för att komma åt studion.")
     
     tab1, tab2 = st.tabs(["Logga in", "Skapa konto"])
@@ -131,7 +140,7 @@ def ladda_och_parsa_fil():
             return json.load(f)
     raise FileNotFoundError("Databas saknas.")
 
-noveller = ladda_bibliotek() if 'ladda_bibliotek' in globals() else ladda_och_parsa_fil()
+noveller = ladda_och_parsa_fil()
 
 # --- 6. CHATT OCH LOGIK ---
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=st.secrets.get("OPENROUTER_API_KEY"))
@@ -139,7 +148,7 @@ client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=st.secrets.get(
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-st.title("novlx 💋")
+st.title("novlx")
 
 for message in st.session_state.chat_history:
     with st.chat_message(message["role"]):
