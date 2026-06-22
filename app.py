@@ -229,16 +229,19 @@ else:
     placeholder = "Skriv 'mer' eller 'fortsätt' för att förlänga, eller styr handlingen fritt..."
     user_input = st.chat_input(placeholder)
 
-# --- STIL-MATCHNINGS MOTOR ---
+# --- STIL-MATCHNINGS MOTOR (TRIMMAD OCH LAGAD) ---
 def hitta_stil_referens(user_prompt):
     if not noveller:
         return "", None
     try:
-        sokord = [ord.lower() for ord in user_prompt.split() if len(ord) > 3]
+        # Filtrera bort korta ord och vanliga utfyllnadsord
+        stoppord = ["eller", "lite", "bara", "kanske", "också", "skriva", "gärna", "mycket", "något", "någon", "denna", "detta", "över", "vill", "till", "från", "inte", "utan", "vara"]
+        sokord = [ord.lower() for ord in user_prompt.split() if len(ord) > 3 and ord.lower() not in stoppord]
+        
         traffar = []
         for n in noveller:
             analys = n.get("analys", {})
-            titel = n.get("title", "")
+            titel = n.get("title", "Okänd titel")
             genre = analys.get("genre", "") or ""
             raw_tags = analys.get("tags")
             tags = raw_tags if isinstance(raw_tags, list) else []
@@ -250,11 +253,21 @@ def hitta_stil_referens(user_prompt):
                 traffar.append((match_poang, n))
         
         if traffar:
+            # 1. Blanda listan FÖRST. Om många noveller får 1 poäng bryts oavgjort helt slumpmässigt!
+            random.shuffle(traffar)
+            # 2. Sortera sedan så de med högst poäng hamnar i toppen.
             traffar.sort(key=lambda x: x[0], reverse=True)
-            vinnare_poang, topp_val = random.choice(traffar[:3])
+            
+            # 3. Bredda urvalet: Lottdragning bland de 15 bästa träffarna istället för bara de 3 bästa.
+            urval = traffar[:15]
+            vinnare_poang, topp_val = random.choice(urval)
+            
+            # Hämta rätt titel från det valda dokumentet (här låg buggen förut!)
+            vinnare_titel = topp_val.get("title", "Okänd titel")
             text_snutt = topp_val.get("text", "")[:2000]
+            
             referens = f"\n\n[SYSTEM-NOTERING: Inspireras av denna stil och ton:\n{text_snutt}...]"
-            debug_info = {"titel": titel, "poang": vinnare_poang}
+            debug_info = {"titel": vinnare_titel, "poang": vinnare_poang}
             return referens, debug_info
     except Exception:
         return "", None
