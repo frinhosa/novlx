@@ -147,27 +147,36 @@ if not api_key:
 
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
 
-# --- SMART NERLADDNING AV DATABASEN (MED GDOWN OCH FELSÖKNING) ---
-# Vi stänger tillfälligt av @st.cache_data så att den tvingas försöka igen vid varje omladdning
-def ladda_bibliotek():
+# --- SMART NERLADDNING AV DATABASEN (MED SJÄLVRENSNING) ---
+@st.cache_data
+def ladda_och_parsa_fil():
+    # 1. Ladda ner filen från Google Drive om den inte finns
     if not os.path.exists(FILNAMN):
         file_id = '1Adzla1qniutzJvN8LTM1hiWRBBpxC9lu'
-        try:
-            # fuzzy=True hjälper till att kringgå Google Drives varningssidor för stora filer
-            gdown.download(id=file_id, output=FILNAMN, quiet=False, fuzzy=True)
-        except Exception as e:
-            st.error(f"🚨 Nerladdningsfel från Google Drive: {e}")
-            return []
-            
+        # Använder id= för att garantera att gamla gdown-versioner förstår vad vi menar
+        gdown.download(id=file_id, output=FILNAMN, quiet=False)
+    
+    # 2. Försök läsa in den hämtade filen
     if os.path.exists(FILNAMN):
         try:
             with open(FILNAMN, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            st.error(f"🚨 Filen laddades ner, men kunde inte läsas (JSON-fel): {e}")
-            return []
+                data = json.load(f)
+                return data
+        except json.JSONDecodeError as e:
+            # KRITISKT: Om filen är korrupt (t.ex. en HTML-varning från Google), radera den!
+            # Annars kommer appen tro att den är klar och misslyckas för alltid.
+            os.remove(FILNAMN)
+            raise ValueError(f"Nedladdad fil var inte en giltig JSON och raderades. Detaljer: {e}")
     else:
-        st.error("🚨 Gdown kördes, men ingen fil skapades på servern.")
+        raise FileNotFoundError("gdown misslyckades med att skapa filen på servern.")
+
+def ladda_bibliotek():
+    try:
+        # Om detta lyckas sparas resultatet i Streamlits blixtsnabba minne
+        return ladda_och_parsa_fil()
+    except Exception as e:
+        # Om det blir fel visar vi felet rött på skärmen så vi vet exakt vad som hände
+        st.error(f"🚨 Databasfel: {e}")
         return []
 
 noveller = ladda_bibliotek()
