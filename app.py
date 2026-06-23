@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import streamlit as st
+import streamlit.components.v1 as components
 import json
 import os
 import random
@@ -46,7 +47,7 @@ def skicka_telegram_notis(ny_anvandare):
             
             requests.post(url, json={"chat_id": chat_id, "text": meddelande})
     except Exception:
-        pass # Ignorerar tyst om nätverket strular
+        pass
 
 # --- 1. DATABAS FÖR ANVÄNDARE (MED SJÄLV-REPARATION) ---
 def ladda_anvandare():
@@ -182,7 +183,7 @@ if not api_key:
 
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
 
-# --- 5. SMART NERLADDNING (GITHUB RELEASES) ---
+# --- 5. SMART NERLADDNING ---
 @st.cache_data
 def ladda_och_parsa_fil():
     if not os.path.exists(FILNAMN):
@@ -348,6 +349,9 @@ if user_input:
                     st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
                     anvandar_db[aktiv_anvandare]["anvanda_idag"] += 1
                     spara_anvandare(anvandar_db)
+                    
+                    # --- AKTIVERAR AUTO-SCROLL ---
+                    st.session_state.scroll_to_ny = True 
                     st.rerun()
                     
                 except Exception as e:
@@ -363,3 +367,18 @@ if len(st.session_state.chat_history) > 0:
         if "senaste_referens" in st.session_state:
             del st.session_state.senaste_referens
         st.rerun()
+
+# --- OSYNLIGT AUTO-SCROLL SKRIPT ---
+if st.session_state.get("scroll_to_ny", False):
+    components.html(
+        """
+        <script>
+            const messages = window.parent.document.querySelectorAll('[data-testid="stChatMessage"]');
+            if (messages.length > 0) {
+                messages[messages.length - 1].scrollIntoView({behavior: 'smooth', block: 'start'});
+            }
+        </script>
+        """,
+        height=0
+    )
+    st.session_state.scroll_to_ny = False
