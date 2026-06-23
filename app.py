@@ -15,6 +15,20 @@ from openai import OpenAI
 # Sätter en renare och mer minimalistisk sidlayout
 st.set_page_config(layout="centered", page_title="6novl", page_icon="💋")
 
+# --- DESIGN & CSS (DÖLJER STANDARD-GRAFIK) ---
+st.markdown("""
+    <style>
+    /* Döljer Streamlits hamburgermeny */
+    #MainMenu {visibility: hidden;}
+    /* Döljer headern */
+    header {visibility: hidden;}
+    /* Döljer 'Made with Streamlit' i botten */
+    footer {visibility: hidden;}
+    /* Döljer den animerade gubben/status-widgeten */
+    div[data-testid="stStatusWidget"] {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
+
 # --- INSTÄLLNINGAR ---
 DEV_MODE = True
 FILNAMN = "kategoriserade_berattelser.json"
@@ -230,8 +244,10 @@ if DEV_MODE and aktiv_anvandare == "admin":
             st.caption("Utdrag till AI:")
             st.code(st.session_state.senaste_referens[:150] + "...", language="text")
 
+# --- RITAR UT HISTORIKEN (MED NYA AVATARER) ---
 for message in st.session_state.chat_history:
-    with st.chat_message(message["role"]):
+    ikon = "💋" if message["role"] == "assistant" else "🖋️"
+    with st.chat_message(message["role"], avatar=ikon):
         st.write(message["content"])
 
 # --- DYNAMISKT TEXTFÄLT (FLIPP-FLOPP) ---
@@ -300,7 +316,7 @@ if user_input:
         kommando = user_input.strip().lower()
         ar_fortsattning = kommando in ["fortsätt", "mer", "vidare", ".", "..", "..."] and len(st.session_state.chat_history) > 0
         
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar="🖋️"):
             st.write(user_input)
             
         st.session_state.chat_history.append({"role": "user", "content": user_input})
@@ -329,7 +345,7 @@ if user_input:
             
         system_prompt = {"role": "system", "content": system_prompt_content}
 
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar="💋"):
             with st.spinner(status_meddelande):
                 try:
                     response = client.chat.completions.create(
