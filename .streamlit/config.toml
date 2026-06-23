@@ -4,11 +4,3 @@ secondaryBackgroundColor = "#2D2D2D"
 textColor = "#F0F0F0"
 primaryColor = "#D6336C"
 font = "sans serif"
-st.markdown("""
-    <head>
-        <title>6novl</title>
-        <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/frinhosa/novlx/main/icon.png">
-        <meta name="apple-mobile-web-app-title" content="6novl">
-        <meta name="apple-mobile-web-app-capable" content="yes">
-    </head>
-""", unsafe_allow_html=True)
