@@ -241,7 +241,7 @@ if DEV_MODE and aktiv_anvandare == "admin":
             st.write(f"**Titel:** {st.session_state.debug_info['titel']}")
             st.write(f"**Poäng:** {st.session_state.debug_info['poang']}")
         if "senaste_referens" in st.session_state:
-            st.caption("Utdrag till AI:")
+            st.caption("Utdrag till AI (Visar 150 tecken):")
             st.code(st.session_state.senaste_referens[:150] + "...", language="text")
 
 # --- RITAR UT HISTORIKEN (MED NYA AVATARER) ---
@@ -269,7 +269,7 @@ else:
     placeholder = "Skriv 'mer' eller 'fortsätt' för att förlänga, eller styr handlingen fritt..."
     user_input = st.chat_input(placeholder)
 
-# --- STIL-MATCHNINGS MOTOR ---
+# --- DEN NYA UPPDATERADE STIL-MATCHNINGS MOTORN ---
 def hitta_stil_referens(user_prompt):
     if not noveller:
         return "", None
@@ -280,33 +280,43 @@ def hitta_stil_referens(user_prompt):
         traffar = []
         for n in noveller:
             analys = n.get("analys", {})
-            titel = n.get("title", "Okänd titel")
-            genre = analys.get("genre", "") or ""
+            titel = n.get("title", "Okänd titel").lower()
+            genre = (analys.get("genre", "") or "").lower()
             raw_tags = analys.get("tags")
-            tags = raw_tags if isinstance(raw_tags, list) else []
-            sammanfattning = analys.get("summary", "") or ""
+            tags = [t.lower() for t in (raw_tags if isinstance(raw_tags, list) else [])]
+            sammanfattning = (analys.get("summary", "") or "").lower()
             
-            metadata = f"{titel} {genre} {' '.join(tags)} {sammanfattning}".lower()
-            match_poang = sum(1 for ord in sokord if ord in metadata)
+            match_poang = 0
+            for ord in sokord:
+                # Viktad sökning: Taggar och genre ger 3 poäng, titel och sammanfattning ger 1 poäng
+                if ord in tags or ord in genre:
+                    match_poang += 3
+                elif ord in titel or ord in sammanfattning:
+                    match_poang += 1
+                    
             if match_poang > 0:
                 traffar.append((match_poang, n))
         
         if traffar:
-            random.shuffle(traffar)
+            # Sorterar så den högsta poängen ligger först
             traffar.sort(key=lambda x: x[0], reverse=True)
-            urval = traffar[:15]
+            
+            # Väljer bland de 5 absolut bästa träffarna istället för de 15 bästa
+            urval = traffar[:5] if len(traffar) >= 5 else traffar
             vinnare_poang, topp_val = random.choice(urval)
             vinnare_titel = topp_val.get("title", "Okänd titel")
-            text_snutt = topp_val.get("text", "")[:2000]
             
-            referens = f"\n\n[SYSTEM-NOTERING: Inspireras av denna stil och ton:\n{text_snutt}...]"
+            # Utökat kontext till 5000 tecken för mycket djupare stil-förståelse
+            text_snutt = topp_val.get("text", "")[:5000]
+            
+            referens = f"\n\n[SYSTEM-NOTERING: Inspireras av denna stil, ton och meningsbyggnad:\n{text_snutt}...]"
             debug_info = {"titel": vinnare_titel, "poang": vinnare_poang}
             return referens, debug_info
     except Exception:
         return "", None
     return "", None
 
-# --- GENERERINGS-LOGIK ---
+# --- GENERERINGS-LOGIK (UPPSTRAMAD PROMPT) ---
 if user_input:
     if not ar_innehall_tillatet(user_input):
         st.error("🛑 Din text innehåller ord eller teman som bryter mot appens riktlinjer. Vänligen justera din beskrivning.")
