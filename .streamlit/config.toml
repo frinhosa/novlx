@@ -4,7 +4,6 @@ secondaryBackgroundColor = "#2D2D2D"
 textColor = "#F0F0F0"
 primaryColor = "#D6336C"
 font = "sans serif"
-# --- PWA / BOKMÄRKE-INSTÄLLNINGAR ---
 st.markdown("""
     <head>
         <title>6novl</title>
