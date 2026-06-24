@@ -342,7 +342,7 @@ def hitta_stil_referens(user_prompt):
         return "", None
     return "", None
 
-# --- GENERERINGS-LOGIK (MED ANKARE FÖR ATT FÖRHINDRA UPPPREPNING) ---
+# --- GENERERINGS-LOGIK ---
 if user_input:
     if not ar_innehall_tillatet(user_input):
         st.error("🛑 Din text innehåller ord eller teman som bryter mot appens riktlinjer. Vänligen justera din beskrivning.")
@@ -376,13 +376,7 @@ if user_input:
         )
         
         if ar_fortsattning:
-            # Den dynamiska ankringsfunktionen som plockar ut de 15 sista orden från förra AI-svaret
-            try:
-                senaste_ai_svar = st.session_state.chat_history[-2]["content"]
-                sista_orden = " ".join(senaste_ai_svar.split()[-15:])
-                system_prompt_content += f"\n\n[STRUKTURELL REGEL: Föregående stycke avslutades så här: \"...{sista_orden}\". Börja ditt svar med det som händer i exakt nästa sekund. Upprepa INTE dessa ord, och skriv inte om det som precis hänt. Fortsätt handlingen framåt direkt.]"
-            except Exception:
-                system_prompt_content += "\n\n[VIKTIGT: Börja din text exakt där den förra slutade utan att upprepa en enda mening av det som redan är skrivet.]"
+            system_prompt_content += "\n\n[VIKTIGT: Fortsätt berättelsen omedelbart framåt. Du får ABSOLUT INTE upprepa det som redan har hänt i föregående stycken. Driv dialogen och handlingen vidare till nästa händelse.]"
         else:
             system_prompt_content += f"{referens_text}"
             
@@ -391,11 +385,14 @@ if user_input:
         with st.chat_message("assistant", avatar="💋"):
             with st.spinner(status_meddelande):
                 try:
+                    # Lade till frequency_penalty och presence_penalty för att döda loopar
                     response = client.chat.completions.create(
                         model="deepseek/deepseek-chat",
                         messages=[system_prompt] + st.session_state.chat_history,
                         max_tokens=4000,
-                        temperature=0.9
+                        temperature=0.9,
+                        frequency_penalty=0.6,
+                        presence_penalty=0.6
                     )
                     ai_response = response.choices[0].message.content
                     
