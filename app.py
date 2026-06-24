@@ -15,6 +15,16 @@ from openai import OpenAI
 # Sätter en renare och mer minimalistisk sidlayout
 st.set_page_config(layout="centered", page_title="6novl", page_icon="💋")
 
+# --- PWA / BOKMÄRKE-INSTÄLLNINGAR ---
+st.markdown("""
+    <head>
+        <title>6novl</title>
+        <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/frinhosa/novlx/main/icon.png">
+        <meta name="apple-mobile-web-app-title" content="6novl">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+    </head>
+""", unsafe_allow_html=True)
+
 # --- DESIGN & CSS (DÖLJER STANDARD-GRAFIK) ---
 st.markdown("""
     <style>
