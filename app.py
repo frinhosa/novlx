@@ -15,15 +15,34 @@ from openai import OpenAI
 # Sätter en renare och mer minimalistisk sidlayout
 st.set_page_config(layout="centered", page_title="6novl", page_icon="💋")
 
-# --- PWA / BOKMÄRKE-INSTÄLLNINGAR ---
-st.markdown("""
-    <head>
-        <title>6novl</title>
-        <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/frinhosa/novlx/main/icon.png">
-        <meta name="apple-mobile-web-app-title" content="6novl">
-        <meta name="apple-mobile-web-app-capable" content="yes">
-    </head>
-""", unsafe_allow_html=True)
+# --- PWA / BOKMÄRKE-INSTÄLLNINGAR (TVINGANDE JAVASCRIPT) ---
+components.html(
+    """
+    <script>
+        // Letar upp sidans 'huvud' där telefonen letar efter app-ikoner
+        const docHead = window.parent.document.head;
+        
+        // Tvingar in din egna ikon (Se till att ditt GitHub-repo är Public!)
+        const iconLink = window.parent.document.createElement('link');
+        iconLink.rel = 'apple-touch-icon';
+        iconLink.href = 'https://raw.githubusercontent.com/frinhosa/novlx/main/icon.png';
+        docHead.appendChild(iconLink);
+        
+        // Tvingar app-namnet till 6novl istället för Streamlit
+        const titleMeta = window.parent.document.createElement('meta');
+        titleMeta.name = 'apple-mobile-web-app-title';
+        titleMeta.content = '6novl';
+        docHead.appendChild(titleMeta);
+        
+        // Talar om för mobilen att detta är en webb-app
+        const appCapable = window.parent.document.createElement('meta');
+        appCapable.name = 'apple-mobile-web-app-capable';
+        appCapable.content = 'yes';
+        docHead.appendChild(appCapable);
+    </script>
+    """,
+    height=0
+)
 
 # --- DESIGN & CSS (DÖLJER STANDARD-GRAFIK) ---
 st.markdown("""
