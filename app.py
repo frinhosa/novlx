@@ -12,29 +12,29 @@ import requests
 from datetime import date
 from openai import OpenAI
 
-# Sätter en renare och mer minimalistisk sidlayout
-st.set_page_config(layout="centered", page_title="6novl", page_icon="💋")
+# --- 1. SÄTTER IKON OCH NAMN DIREKT I KÄRNAN ---
+# Vi ber Streamlit att i första hand använda din uppladdade bild. 
+# Finns den inte (t.ex. vid felstavning) faller den mjukt tillbaka på läpp-emojin.
+app_ikon = "icon.png" if os.path.exists("icon.png") else "💋"
+st.set_page_config(layout="centered", page_title="6novl", page_icon=app_ikon)
 
 # --- PWA / BOKMÄRKE-INSTÄLLNINGAR (TVINGANDE JAVASCRIPT) ---
+# Vi behåller detta för Android-telefoner som är lite snällare än iPhones
 components.html(
     """
     <script>
-        // Letar upp sidans 'huvud' där telefonen letar efter app-ikoner
         const docHead = window.parent.document.head;
         
-        // Tvingar in din egna ikon (Se till att ditt GitHub-repo är Public!)
         const iconLink = window.parent.document.createElement('link');
         iconLink.rel = 'apple-touch-icon';
         iconLink.href = 'https://raw.githubusercontent.com/frinhosa/novlx/main/icon.png';
         docHead.appendChild(iconLink);
         
-        // Tvingar app-namnet till 6novl istället för Streamlit
         const titleMeta = window.parent.document.createElement('meta');
         titleMeta.name = 'apple-mobile-web-app-title';
         titleMeta.content = '6novl';
         docHead.appendChild(titleMeta);
         
-        // Talar om för mobilen att detta är en webb-app
         const appCapable = window.parent.document.createElement('meta');
         appCapable.name = 'apple-mobile-web-app-capable';
         appCapable.content = 'yes';
