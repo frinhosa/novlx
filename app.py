@@ -13,13 +13,10 @@ from datetime import date
 from openai import OpenAI
 
 # --- 1. SÄTTER IKON OCH NAMN DIREKT I KÄRNAN ---
-# Vi ber Streamlit att i första hand använda din uppladdade bild. 
-# Finns den inte (t.ex. vid felstavning) faller den mjukt tillbaka på läpp-emojin.
 app_ikon = "icon.png" if os.path.exists("icon.png") else "💋"
 st.set_page_config(layout="centered", page_title="6novl", page_icon=app_ikon)
 
 # --- PWA / BOKMÄRKE-INSTÄLLNINGAR (TVINGANDE JAVASCRIPT) ---
-# Vi behåller detta för Android-telefoner som är lite snällare än iPhones
 components.html(
     """
     <script>
@@ -345,7 +342,7 @@ def hitta_stil_referens(user_prompt):
         return "", None
     return "", None
 
-# --- GENERERINGS-LOGIK (UPPSTRAMAD PROMPT) ---
+# --- GENERERINGS-LOGIK (MED ANKARE FÖR ATT FÖRHINDRA UPPPREPNING) ---
 if user_input:
     if not ar_innehall_tillatet(user_input):
         st.error("🛑 Din text innehåller ord eller teman som bryter mot appens riktlinjer. Vänligen justera din beskrivning.")
@@ -379,7 +376,13 @@ if user_input:
         )
         
         if ar_fortsattning:
-            system_prompt_content += "\n\n[VIKTIGT: Driv handlingen FRAMÅT från allra sista meningen. Upprepa INTE och skriv INTE om det du redan skrivit. Jag vill enbart ha NÄSTA händelseförlopp i berättelsen.]"
+            # Den dynamiska ankringsfunktionen som plockar ut de 15 sista orden från förra AI-svaret
+            try:
+                senaste_ai_svar = st.session_state.chat_history[-2]["content"]
+                sista_orden = " ".join(senaste_ai_svar.split()[-15:])
+                system_prompt_content += f"\n\n[STRUKTURELL REGEL: Föregående stycke avslutades så här: \"...{sista_orden}\". Börja ditt svar med det som händer i exakt nästa sekund. Upprepa INTE dessa ord, och skriv inte om det som precis hänt. Fortsätt handlingen framåt direkt.]"
+            except Exception:
+                system_prompt_content += "\n\n[VIKTIGT: Börja din text exakt där den förra slutade utan att upprepa en enda mening av det som redan är skrivet.]"
         else:
             system_prompt_content += f"{referens_text}"
             
