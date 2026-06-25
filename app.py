@@ -186,16 +186,33 @@ with st.sidebar:
     st.subheader(f"👤 {aktiv_anvandare.capitalize()}")
     if aktiv_anvandare == "admin":
         st.markdown("---")
-        st.subheader("🛠️ Admin: Godkänn användare")
+        st.subheader("🛠️ Hantera användare")
+        
+        # Sektion för att godkänna nya användare
         pending_users = [u for u, data in anvandar_db.items() if not data.get("godkand", False)]
-        if not pending_users:
-            st.write("Inga väntande användare.")
-        else:
+        if pending_users:
+            st.write("**Väntar på godkännande:**")
             for user in pending_users:
-                if st.button(f"Godkänn {user}"):
+                if st.button(f"✅ Godkänn {user}"):
                     anvandar_db[user]["godkand"] = True
                     spara_anvandare(anvandar_db)
                     st.rerun()
+        else:
+            st.write("Inga användare väntar på godkännande.")
+            
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Sektion för att ta bort användare
+        befintliga_anvandare = [u for u in anvandar_db.keys() if u != "admin"]
+        if befintliga_anvandare:
+            anvandare_att_radera = st.selectbox("**Ta bort användare:**", ["Välj..."] + befintliga_anvandare)
+            if anvandare_att_radera != "Välj...":
+                if st.button(f"🗑️ Radera '{anvandare_att_radera}'"):
+                    del anvandar_db[anvandare_att_radera]
+                    spara_anvandare(anvandar_db)
+                    st.rerun()
+                    
+    st.markdown("---")
     st.progress(min(anvanda_tokens / max_kvot, 1.0))
     st.write(f"🎟️ Använda generationer: {anvanda_tokens} av {max_kvot}")
     if st.button("Logga ut"):
