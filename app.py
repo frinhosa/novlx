@@ -44,10 +44,9 @@ components.html(
 # --- DESIGN & CSS (DÖLJER STANDARD-GRAFIK) ---
 st.markdown("""
     <style>
-    /* Döljer Streamlits hamburgermeny */
+    /* Döljer Streamlits hamburgermeny i högra hörnet */
     #MainMenu {visibility: hidden;}
-    /* Döljer headern */
-    header {visibility: hidden;}
+    /* Vi döljer INTE headern längre, annars försvinner knappen för sidomenyn på mobilen! */
     /* Döljer 'Made with Streamlit' i botten */
     footer {visibility: hidden;}
     /* Döljer den animerade gubben/status-widgeten */
@@ -202,15 +201,16 @@ with st.sidebar:
             
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Sektion för att ta bort användare
+        # Sektion för att ta bort användare (Med inbyggt säkerhetslås)
         befintliga_anvandare = [u for u in anvandar_db.keys() if u != "admin"]
         if befintliga_anvandare:
             anvandare_att_radera = st.selectbox("**Ta bort användare:**", ["Välj..."] + befintliga_anvandare)
             if anvandare_att_radera != "Välj...":
                 if st.button(f"🗑️ Radera '{anvandare_att_radera}'"):
-                    del anvandar_db[anvandare_att_radera]
-                    spara_anvandare(anvandar_db)
-                    st.rerun()
+                    if anvandare_att_radera in anvandar_db:
+                        del anvandar_db[anvandare_att_radera]
+                        spara_anvandare(anvandar_db)
+                        st.rerun()
                     
     st.markdown("---")
     st.progress(min(anvanda_tokens / max_kvot, 1.0))
@@ -402,7 +402,7 @@ if user_input:
         with st.chat_message("assistant", avatar="💋"):
             with st.spinner(status_meddelande):
                 try:
-                    # Lade till frequency_penalty och presence_penalty för att döda loopar
+                    # Anti-loop straff: Tvingar AI:n att hitta på nya meningar
                     response = client.chat.completions.create(
                         model="deepseek/deepseek-chat",
                         messages=[system_prompt] + st.session_state.chat_history,
