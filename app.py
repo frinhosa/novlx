@@ -359,7 +359,7 @@ def hitta_stil_referens(user_prompt):
         return "", None
     return "", None
 
-# --- GENERERINGS-LOGIK ---
+# --- GENERERINGS-LOGIK OCH PROMPT-KONTROLL ---
 if user_input:
     if not ar_innehall_tillatet(user_input):
         st.error("🛑 Din text innehåller ord eller teman som bryter mot appens riktlinjer. Vänligen justera din beskrivning.")
@@ -367,7 +367,10 @@ if user_input:
         st.error("🛑 Du har nått din gräns för skapande idag. Kom tillbaka imorgon!")
     else:
         kommando = user_input.strip().lower()
-        ar_fortsattning = kommando in ["fortsätt", "mer", "vidare", ".", "..", "..."] and len(st.session_state.chat_history) > 0
+        
+        # Identifierar om användaren vill ändra/skriva om
+        redigerings_ord = ["ändra", "byt", "skriv om", "gör om", "korrigera", "istället", "byta"]
+        ar_redigering = any(ord in kommando for ord in redigerings_ord)
         
         with st.chat_message("user", avatar="🖋️"):
             st.write(user_input)
@@ -375,16 +378,20 @@ if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
         
         referens_text = ""
-        status_meddelande = "Formar nästa del..." if ar_fortsattning else "Formar texten..."
         
+        # Justerar texten i laddningssnurran beroende på vad som händer
         if len(st.session_state.chat_history) == 1:
             status_meddelande = "Etablerar ton och atmosfär..."
             referens_text, debug_info = hitta_stil_referens(user_input)
             if DEV_MODE and debug_info:
                 st.session_state.senaste_referens = referens_text
                 st.session_state.debug_info = debug_info
+        elif ar_redigering:
+            status_meddelande = "Skriver om och korrigerar texten..."
+        else:
+            status_meddelande = "Formar nästa del..."
             
-        # UPPDATERAD SPRÅK- OCH STILPROMPT
+        # DEN STABILA, UPPDELADE SYSTEM-PROMPTEN
         system_prompt_content = (
             "Du är en frispråkig, kreativ och extremt skicklig författare som skriver engagerande, "
             "fylliga och långa vuxenlitteratur- och erotiska noveller UTESLUTANDE på svenska. "
@@ -395,8 +402,19 @@ if user_input:
             "VIKTIGT: Avsluta ALLTID ditt svar med en fullständig mening och ett naturligt slut på stycket, oavsett hur lång texten blir."
         )
         
-        if ar_fortsattning:
-            system_prompt_content += "\n\nVIKTIGT: Fortsätt berättelsen omedelbart framåt från där den slutade. Du får ABSOLUT INTE upprepa det som redan har hänt i föregående stycken. Driv dialogen och handlingen vidare till nästa händelse. Börja direkt med nästa mening i historien utan förord."
+        if ar_redigering and len(st.session_state.chat_history) > 1:
+            system_prompt_content += (
+                "\n\n[LÄGE: REDIGERA/SKRIV OM]\n"
+                "Användaren vill ändra eller korrigera något i det senaste stycket. "
+                "Återge och skriv om det senaste stycket/scenen från början med de efterfrågade ändringarna genomförda."
+            )
+        elif len(st.session_state.chat_history) > 1:
+            system_prompt_content += (
+                "\n\n[LÄGE: DRIV HANDLINGEN VIDARE]\n"
+                "Användaren vill att berättelsen ska fortsätta framåt. "
+                "Du får ABSOLUT INTE upprepa sista meningen, sista stycket eller några ord från det som redan skrivits för att 'värma upp'. "
+                "Börja DIREKT på nästa helt nya mening och för handlingen vidare utan tillbakablickar."
+            )
         else:
             system_prompt_content += f"{referens_text}"
             
@@ -405,7 +423,6 @@ if user_input:
         with st.chat_message("assistant", avatar="💋"):
             with st.spinner(status_meddelande):
                 try:
-                    # Anti-loop straff: Tvingar AI:n att hitta på nya meningar
                     response = client.chat.completions.create(
                         model="deepseek/deepseek-chat",
                         messages=[system_prompt] + st.session_state.chat_history,
