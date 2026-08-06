@@ -190,7 +190,6 @@ with st.sidebar:
                     elif ny_anvandare in anvandar_db or ny_anvandare == "admin":
                         st.error("Användarnamnet är upptaget.")
                     else:
-                        # Direkt godkännande
                         anvandar_db[ny_anvandare] = {
                             "losenord": nytt_losenord,
                             "max_kvot": 20,
@@ -242,7 +241,7 @@ def ladda_och_parsa_fil():
 
 noveller = ladda_och_parsa_fil()
 
-# --- UTVECKLARVERKTYG FÖR ADMIN (TILLBAKALAGDA) ---
+# --- UTVECKLARVERKTYG FÖR ADMIN ---
 if DEV_MODE and aktiv_anvandare == "admin":
     with st.sidebar:
         st.subheader("🛠️ Utvecklarverktyg")
@@ -298,7 +297,13 @@ if not aktiv_anvandare and st.session_state.gast_genereringar >= 1:
         u_log = st.text_input("Användarnamn", key="main_log_user").strip().lower()
         p_log = st.text_input("Lösenord", type="password", key="main_log_pass")
         if st.button("Logga in & Fortsätt", key="main_log_btn"):
-            if u_log in anvandar_db and anvandar_db[u_log].get("losenord") == p_log:
+            if u_log == "admin":
+                if "ADMIN_PASSWORD" in st.secrets and p_log == st.secrets["ADMIN_PASSWORD"]:
+                    st.session_state.inloggad_anvandare = "admin"
+                    st.rerun()
+                else:
+                    st.error("Fel administratörslösenord.")
+            elif u_log in anvandar_db and anvandar_db[u_log].get("losenord") == p_log:
                 st.session_state.inloggad_anvandare = u_log
                 st.rerun()
             else:
@@ -384,7 +389,6 @@ if user_input:
             status_meddelande = "Etablerar ton och atmosfär..."
             referens_text, debug_info = hitta_stil_referens(user_input)
             
-            # Spara infon för admin-panelen (TILLBAKALAGD FUNKTION)
             if DEV_MODE and debug_info:
                 st.session_state.senaste_referens = referens_text
                 st.session_state.debug_info = debug_info
@@ -476,7 +480,6 @@ if len(st.session_state.chat_history) > 0:
         st.session_state.chat_history = []
         st.session_state.gast_genereringar = 0
         
-        # Rensar även debug-infon (TILLBAKALAGD FUNKTION)
         if "senaste_referens" in st.session_state:
             del st.session_state.senaste_referens
         if "debug_info" in st.session_state:
