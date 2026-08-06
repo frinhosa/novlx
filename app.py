@@ -16,7 +16,7 @@ from openai import OpenAI
 app_ikon = "icon.png" if os.path.exists("icon.png") else "💋"
 st.set_page_config(layout="centered", page_title="6novl", page_icon=app_ikon)
 
-# --- PWA / BOKMÄRKE-INSTÄLLNINGAR (TVINGANDE JAVASCRIPT) ---
+# --- PWA / BOKMÄRKE-INSTÄLLNINGAR ---
 components.html(
     """
     <script>
@@ -41,15 +41,11 @@ components.html(
     height=0
 )
 
-# --- DESIGN & CSS (DÖLJER STANDARD-GRAFIK) ---
+# --- DESIGN & CSS ---
 st.markdown("""
     <style>
-    /* Döljer Streamlits hamburgermeny i högra hörnet */
     #MainMenu {visibility: hidden;}
-    /* Vi döljer INTE headern längre, annars försvinner knappen för sidomenyn på mobilen! */
-    /* Döljer 'Made with Streamlit' i botten */
     footer {visibility: hidden;}
-    /* Döljer den animerade gubben/status-widgeten */
     div[data-testid="stStatusWidget"] {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
@@ -61,7 +57,7 @@ ZIP_FILNAMN = "kategoriserade_berattelser.zip"
 ZIP_URL = "https://github.com/frinhosa/novlx/releases/download/1.0/kategoriserade_berattelser.zip"
 ANVANDAR_FIL = "anvandare.json"
 
-# --- INNEHÅLLSFILTER (SVARTLISTA) ---
+# --- INNEHÅLLSFILTER ---
 FORBJUDNA_ORD = [
     "minderårig", "minderåriga", "barn", "olaglig", "incest", 
     "våldtäkt", "våldtäkter", "pedofili", "djur", 
@@ -82,13 +78,12 @@ def skicka_telegram_notis(ny_anvandare):
             bot_token = st.secrets["TELEGRAM_BOT_TOKEN"]
             chat_id = st.secrets["TELEGRAM_CHAT_ID"]
             url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            meddelande = f"🚨 Ny användare i 6novl!\n\nAnvändarnamn: '{ny_anvandare}' väntar på ditt godkännande."
-            
+            meddelande = f"🚨 Ny användare registrerad i 6novl!\n\nAnvändarnamn: '{ny_anvandare}'"
             requests.post(url, json={"chat_id": chat_id, "text": meddelande})
     except Exception:
         pass
 
-# --- 1. DATABAS FÖR ANVÄNDARE (MED SJÄLV-REPARATION) ---
+# --- DATABAS FÖR ANVÄNDARE (MED SJÄLV-REPARATION) ---
 def ladda_anvandare():
     if not os.path.exists(ANVANDAR_FIL):
         data = {}
@@ -118,111 +113,100 @@ def spara_anvandare(data):
 
 anvandar_db = ladda_anvandare()
 
-# --- 2. GATEKEEPER: INLOGGNING OCH REGISTRERING ---
+# --- INITIERA SESSION STATE ---
 if "inloggad_anvandare" not in st.session_state:
     st.session_state.inloggad_anvandare = None
 
-if st.session_state.inloggad_anvandare is None:
-    st.title("6novl 💋")
-    st.write("Logga in eller skapa konto för att komma åt studion.")
-    
-    tab1, tab2 = st.tabs(["Logga in", "Skapa konto"])
-    
-    with tab1:
-        anvandarnamn = st.text_input("Användarnamn", key="login_user").strip().lower()
-        losenord = st.text_input("Lösenord", type="password", key="login_pass")
-        if st.button("Logga in"):
-            if anvandarnamn == "admin":
-                if "ADMIN_PASSWORD" in st.secrets and losenord == st.secrets["ADMIN_PASSWORD"]:
-                    st.session_state.inloggad_anvandare = "admin"
-                    st.rerun()
-                else:
-                    st.error("Fel administratörslösenord.")
-            elif anvandarnamn in anvandar_db and anvandar_db[anvandarnamn].get("losenord") == losenord:
-                if anvandar_db[anvandarnamn].get("godkand", False):
-                    st.session_state.inloggad_anvandare = anvandarnamn
-                    st.rerun()
-                else:
-                    st.error("Ditt konto väntar fortfarande på godkännande av admin.")
-            else:
-                st.error("Fel användarnamn eller lösenord.")
-                
-    with tab2:
-        ny_anvandare = st.text_input("Välj användarnamn", key="reg_user").strip().lower()
-        nytt_losenord = st.text_input("Välj lösenord", type="password", key="reg_pass")
-        if st.button("Skapa konto"):
-            if not ny_anvandare or not nytt_losenord:
-                st.warning("Fyll i både användarnamn och lösenord.")
-            elif ny_anvandare == "admin" or ny_anvandare in anvandar_db:
-                st.error("Användarnamnet är upptaget.")
-            else:
-                anvandar_db[ny_anvandare] = {
-                    "losenord": nytt_losenord,
-                    "max_kvot": 20,
-                    "anvanda_idag": 0,
-                    "senaste_datum": str(date.today()),
-                    "godkand": False
-                }
-                spara_anvandare(anvandar_db)
-                st.success("Konto skapat! Väntar på godkännande av admin.")
-                skicka_telegram_notis(ny_anvandare)
-    st.stop()
+if "gast_genereringar" not in st.session_state:
+    st.session_state.gast_genereringar = 0
 
-# --- 3. ANVÄNDAREN ÄR INLOGGAD ---
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
 aktiv_anvandare = st.session_state.inloggad_anvandare
 dagens_datum = str(date.today())
 
-if anvandar_db[aktiv_anvandare]["senaste_datum"] != dagens_datum:
-    anvandar_db[aktiv_anvandare]["anvanda_idag"] = 0
-    anvandar_db[aktiv_anvandare]["senaste_datum"] = dagens_datum
-    spara_anvandare(anvandar_db)
+# --- BERÄKNA KVOTER ---
+if aktiv_anvandare:
+    if anvandar_db[aktiv_anvandare].get("senaste_datum") != dagens_datum:
+        anvandar_db[aktiv_anvandare]["anvanda_idag"] = 0
+        anvandar_db[aktiv_anvandare]["senaste_datum"] = dagens_datum
+        spara_anvandare(anvandar_db)
 
-anvanda_tokens = anvandar_db[aktiv_anvandare]["anvanda_idag"]
-max_kvot = anvandar_db[aktiv_anvandare]["max_kvot"]
+    anvanda_tokens = anvandar_db[aktiv_anvandare].get("anvanda_idag", 0)
+    max_kvot = anvandar_db[aktiv_anvandare].get("max_kvot", 20)
+else:
+    anvanda_tokens = st.session_state.gast_genereringar
+    max_kvot = 1  # Gäster får exakt 1 fri generering
 
-# --- 4. ADMINISTRATÖR & SIDOMENY ---
+# --- SIDOMENY OCH GÄST-INLOGG ---
 with st.sidebar:
-    st.subheader(f"👤 {aktiv_anvandare.capitalize()}")
-    if aktiv_anvandare == "admin":
-        st.markdown("---")
-        st.subheader("🛠️ Hantera användare")
+    if aktiv_anvandare:
+        st.subheader(f"👤 {aktiv_anvandare.capitalize()}")
+        st.progress(min(anvanda_tokens / max_kvot, 1.0))
+        st.write(f"🎟️ Använda idag: {anvanda_tokens} av {max_kvot}")
         
-        # Sektion för att godkänna nya användare
-        pending_users = [u for u, data in anvandar_db.items() if not data.get("godkand", False)]
-        if pending_users:
-            st.write("**Väntar på godkännande:**")
-            for user in pending_users:
-                if st.button(f"✅ Godkänn {user}"):
-                    anvandar_db[user]["godkand"] = True
+        if aktiv_anvandare == "admin":
+            st.markdown("---")
+            st.subheader("🛠️ Hantera användare")
+            befintliga_anvandare = [u for u in anvandar_db.keys() if u != "admin"]
+            if befintliga_anvandare:
+                anvandare_att_radera = st.selectbox("Radera användare:", ["Välj..."] + befintliga_anvandare)
+                if anvandare_att_radera != "Välj..." and st.button(f"🗑️ Radera '{anvandare_att_radera}'"):
+                    del anvandar_db[anvandare_att_radera]
                     spara_anvandare(anvandar_db)
                     st.rerun()
-        else:
-            st.write("Inga användare väntar på godkännande.")
-            
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Sektion för att ta bort användare (Med inbyggt säkerhetslås)
-        befintliga_anvandare = [u for u in anvandar_db.keys() if u != "admin"]
-        if befintliga_anvandare:
-            anvandare_att_radera = st.selectbox("**Ta bort användare:**", ["Välj..."] + befintliga_anvandare)
-            if anvandare_att_radera != "Välj...":
-                if st.button(f"🗑️ Radera '{anvandare_att_radera}'"):
-                    if anvandare_att_radera in anvandar_db:
-                        del anvandar_db[anvandare_att_radera]
-                        spara_anvandare(anvandar_db)
-                        st.rerun()
                     
-    st.markdown("---")
-    st.progress(min(anvanda_tokens / max_kvot, 1.0))
-    st.write(f"🎟️ Använda generationer: {anvanda_tokens} av {max_kvot}")
-    if st.button("Logga ut"):
-        st.session_state.inloggad_anvandare = None
-        st.session_state.chat_history = []
-        st.rerun()
+        if st.button("Logga ut"):
+            st.session_state.inloggad_anvandare = None
+            st.rerun()
+    else:
+        st.subheader("👤 Gästläge")
+        st.info("Du har 1 fri provgenerering. Skapa konto för full tillgång!")
+        
+        with st.expander("🔑 Logga in / Skapa konto"):
+            tab1, tab2 = st.tabs(["Logga in", "Skapa konto"])
+            with tab1:
+                anvandarnamn = st.text_input("Användarnamn", key="sidebar_login_user").strip().lower()
+                losenord = st.text_input("Lösenord", type="password", key="sidebar_login_pass")
+                if st.button("Logga in", key="btn_login"):
+                    if anvandarnamn == "admin":
+                        if "ADMIN_PASSWORD" in st.secrets and losenord == st.secrets["ADMIN_PASSWORD"]:
+                            st.session_state.inloggad_anvandare = "admin"
+                            st.rerun()
+                        else:
+                            st.error("Fel lösenord.")
+                    elif anvandarnamn in anvandar_db and anvandar_db[anvandarnamn].get("losenord") == losenord:
+                        st.session_state.inloggad_anvandare = anvandarnamn
+                        st.rerun()
+                    else:
+                        st.error("Fel användarnamn eller lösenord.")
+            with tab2:
+                ny_anvandare = st.text_input("Välj användarnamn", key="sidebar_reg_user").strip().lower()
+                nytt_losenord = st.text_input("Välj lösenord", type="password", key="sidebar_reg_pass")
+                if st.button("Skapa konto", key="btn_reg"):
+                    if not ny_anvandare or not nytt_losenord:
+                        st.warning("Fyll i alla fält.")
+                    elif ny_anvandare in anvandar_db or ny_anvandare == "admin":
+                        st.error("Användarnamnet är upptaget.")
+                    else:
+                        # Direkt godkännande
+                        anvandar_db[ny_anvandare] = {
+                            "losenord": nytt_losenord,
+                            "max_kvot": 20,
+                            "anvanda_idag": 0,
+                            "senaste_datum": str(date.today()),
+                            "godkand": True
+                        }
+                        spara_anvandare(anvandar_db)
+                        skicka_telegram_notis(ny_anvandare)
+                        st.session_state.inloggad_anvandare = ny_anvandare
+                        st.rerun()
+
     st.markdown("---")
     st.caption("📧 Kontakt: 6novl@proton.me")
 
-# --- KAMELEON-LÖSNING FÖR API-NYCKEL ---
+# --- API OCH DATABAS-LADDNING ---
 api_key = None
 try:
     if "OPENROUTER_API_KEY" in st.secrets:
@@ -230,17 +214,16 @@ try:
 except Exception:
     pass
 
+if not api_key and os.path.exists("openrouter_nyckel.txt"):
+    with open("openrouter_nyckel.txt", "r", encoding="utf-8") as f:
+        api_key = f.read().strip()
+
 if not api_key:
-    if os.path.exists("openrouter_nyckel.txt"):
-        with open("openrouter_nyckel.txt", "r", encoding="utf-8") as f:
-            api_key = f.read().strip()
-    else:
-        st.error("Systemfel: Hittar inte API-nyckeln.")
-        st.stop()
+    st.error("Systemfel: Hittar inte API-nyckeln.")
+    st.stop()
 
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
 
-# --- 5. SMART NERLADDNING ---
 @st.cache_data
 def ladda_och_parsa_fil():
     if not os.path.exists(FILNAMN):
@@ -251,30 +234,15 @@ def ladda_och_parsa_fil():
             with zipfile.ZipFile(ZIP_FILNAMN, 'r') as zip_ref:
                 zip_ref.extractall(".")
         except Exception as e:
-            raise Exception(f"Kunde inte ladda ner/packa upp: {e}")
-    
+            raise Exception(f"Kunde inte ladda ner: {e}")
     if os.path.exists(FILNAMN):
         with open(FILNAMN, "r", encoding="utf-8") as f:
             return json.load(f)
-    raise FileNotFoundError("Databas saknas.")
+    return []
 
-def ladda_bibliotek():
-    try:
-        return ladda_och_parsa_fil()
-    except Exception as e:
-        st.error(f"🚨 Databasfel: {e}")
-        return []
+noveller = ladda_och_parsa_fil()
 
-noveller = ladda_bibliotek()
-
-# --- 6. DESIGN: HUVUDAPPEN ---
-st.title("6novl 💋")
-st.markdown("<p style='font-style: italic; color: #888;'>Den interaktiva skrivarstudion för vuxenlitteratur.</p>", unsafe_allow_html=True)
-
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-
-# --- UTVECKLARVERKTYG FÖR ADMIN ---
+# --- UTVECKLARVERKTYG FÖR ADMIN (TILLBAKALAGDA) ---
 if DEV_MODE and aktiv_anvandare == "admin":
     with st.sidebar:
         st.subheader("🛠️ Utvecklarverktyg")
@@ -287,32 +255,74 @@ if DEV_MODE and aktiv_anvandare == "admin":
             st.caption("Utdrag till AI (Visar 150 tecken):")
             st.code(st.session_state.senaste_referens[:150] + "...", language="text")
 
-# --- RITAR UT HISTORIKEN (MED NYA AVATARER) ---
+# --- HUVUDYTA ---
+st.title("6novl 💋")
+st.markdown("<p style='font-style: italic; color: #888;'>Den interaktiva skrivarstudion för vuxenlitteratur.</p>", unsafe_allow_html=True)
+
+# Ritar ut befintlig historia
 for message in st.session_state.chat_history:
     ikon = "💋" if message["role"] == "assistant" else "🖋️"
     with st.chat_message(message["role"], avatar=ikon):
         st.write(message["content"])
 
-# --- DYNAMISKT TEXTFÄLT (FLIPP-FLOPP) ---
+# --- INMATNINGSLOGIK ---
 user_input = None
 
-if len(st.session_state.chat_history) == 0:
-    st.write("Beskriv en scen, en stämning eller en karaktär nedan för att påbörja berättelsen.")
-    with st.form(key="start_scen_form"):
-        user_input_raw = st.text_area(
-            "Vad vill du skriva om?", 
-            placeholder="Beskriv din vision (t.ex. 'Ett intensivt och oväntat möte i ett regnigt Stockholm')...",
-            height=150,
-            label_visibility="collapsed"
-        )
-        skapa_knapp = st.form_submit_button("Påbörja berättelsen 💋")
-        if skapa_knapp and user_input_raw.strip():
-            user_input = user_input_raw.strip()
-else:
-    placeholder = "Skriv 'mer' eller 'fortsätt' för att förlänga, eller styr handlingen fritt..."
-    user_input = st.chat_input(placeholder)
+# OM GÄSTEN HAR FÖRBRUKAT SIN 1 FRIA GENERERING -> VISA INLOGGNINGSMUR
+if not aktiv_anvandare and st.session_state.gast_genereringar >= 1:
+    st.warning("🔒 Du har provat din fria generering! Skapa ett gratis konto eller logga in för att fortsätta berättelsen (20 fria genereringar/dag).")
+    
+    t1, t2 = st.tabs(["Skapa konto (Snabbast)", "Logga in"])
+    with t1:
+        u_reg = st.text_input("Användarnamn", key="main_reg_user").strip().lower()
+        p_reg = st.text_input("Lösenord", type="password", key="main_reg_pass")
+        if st.button("Skapa konto & Fortsätt 💋", key="main_reg_btn"):
+            if not u_reg or not p_reg:
+                st.warning("Fyll i både användarnamn och lösenord.")
+            elif u_reg in anvandar_db or u_reg == "admin":
+                st.error("Namnet är upptaget.")
+            else:
+                anvandar_db[u_reg] = {
+                    "losenord": p_reg,
+                    "max_kvot": 20,
+                    "anvanda_idag": 0,
+                    "senaste_datum": str(date.today()),
+                    "godkand": True
+                }
+                spara_anvandare(anvandar_db)
+                skicka_telegram_notis(u_reg)
+                st.session_state.inloggad_anvandare = u_reg
+                st.success("Konto skapat! Du är nu inloggad.")
+                st.rerun()
+    with t2:
+        u_log = st.text_input("Användarnamn", key="main_log_user").strip().lower()
+        p_log = st.text_input("Lösenord", type="password", key="main_log_pass")
+        if st.button("Logga in & Fortsätt", key="main_log_btn"):
+            if u_log in anvandar_db and anvandar_db[u_log].get("losenord") == p_log:
+                st.session_state.inloggad_anvandare = u_log
+                st.rerun()
+            else:
+                st.error("Fel användarnamn eller lösenord.")
 
-# --- DEN NYA UPPDATERADE STIL-MATCHNINGS MOTORN ---
+# OM ANVÄNDAREN FÅR SKRIVA (GÄST MED 0 UTNYTTJAT ELLER INLOGGAD ANVÄNDARE)
+else:
+    if len(st.session_state.chat_history) == 0:
+        st.write("Beskriv en scen, en stämning eller en karaktär nedan för att påbörja berättelsen.")
+        with st.form(key="start_scen_form"):
+            user_input_raw = st.text_area(
+                "Vad vill du skriva om?", 
+                placeholder="Beskriv din vision (t.ex. 'Ett intensivt och oväntat möte i ett regnigt Stockholm')...",
+                height=150,
+                label_visibility="collapsed"
+            )
+            skapa_knapp = st.form_submit_button("Påbörja berättelsen 💋")
+            if skapa_knapp and user_input_raw.strip():
+                user_input = user_input_raw.strip()
+    else:
+        placeholder = "Skriv 'mer' eller 'fortsätt' för att förlänga, eller styr handlingen fritt..."
+        user_input = st.chat_input(placeholder)
+
+# --- STIL-MATCHNINGS MOTOR ---
 def hitta_stil_referens(user_prompt):
     if not noveller:
         return "", None
@@ -331,7 +341,6 @@ def hitta_stil_referens(user_prompt):
             
             match_poang = 0
             for ord in sokord:
-                # Viktad sökning: Taggar och genre ger 3 poäng, titel och sammanfattning ger 1 poäng
                 if ord in tags or ord in genre:
                     match_poang += 3
                 elif ord in titel or ord in sammanfattning:
@@ -341,15 +350,10 @@ def hitta_stil_referens(user_prompt):
                 traffar.append((match_poang, n))
         
         if traffar:
-            # Sorterar så den högsta poängen ligger först
             traffar.sort(key=lambda x: x[0], reverse=True)
-            
-            # Väljer bland de 5 absolut bästa träffarna istället för de 15 bästa
             urval = traffar[:5] if len(traffar) >= 5 else traffar
             vinnare_poang, topp_val = random.choice(urval)
             vinnare_titel = topp_val.get("title", "Okänd titel")
-            
-            # Utökat kontext till 5000 tecken för mycket djupare stil-förståelse
             text_snutt = topp_val.get("text", "")[:5000]
             
             referens = f"\n\n[SYSTEM-NOTERING: Inspireras av denna stil, ton och meningsbyggnad:\n{text_snutt}...]"
@@ -359,16 +363,14 @@ def hitta_stil_referens(user_prompt):
         return "", None
     return "", None
 
-# --- GENERERINGS-LOGIK OCH PROMPT-KONTROLL ---
+# --- AI-GENERERING ---
 if user_input:
     if not ar_innehall_tillatet(user_input):
-        st.error("🛑 Din text innehåller ord eller teman som bryter mot appens riktlinjer. Vänligen justera din beskrivning.")
-    elif anvanda_tokens >= max_kvot:
-        st.error("🛑 Du har nått din gräns för skapande idag. Kom tillbaka imorgon!")
+        st.error("🛑 Din text innehåller ord eller teman som bryter mot appens riktlinjer.")
+    elif aktiv_anvandare and anvanda_tokens >= max_kvot:
+        st.error("🛑 Du har nått din kvot för idag. Kom tillbaka imorgon!")
     else:
         kommando = user_input.strip().lower()
-        
-        # Identifierar om användaren vill ändra/skriva om
         redigerings_ord = ["ändra", "byt", "skriv om", "gör om", "korrigera", "istället", "byta"]
         ar_redigering = any(ord in kommando for ord in redigerings_ord)
         
@@ -378,42 +380,42 @@ if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input})
         
         referens_text = ""
-        
-        # Justerar texten i laddningssnurran beroende på vad som händer
         if len(st.session_state.chat_history) == 1:
             status_meddelande = "Etablerar ton och atmosfär..."
             referens_text, debug_info = hitta_stil_referens(user_input)
+            
+            # Spara infon för admin-panelen (TILLBAKALAGD FUNKTION)
             if DEV_MODE and debug_info:
                 st.session_state.senaste_referens = referens_text
                 st.session_state.debug_info = debug_info
+                
         elif ar_redigering:
             status_meddelande = "Skriver om och korrigerar texten..."
         else:
             status_meddelande = "Formar nästa del..."
             
-        # DEN STABILA, UPPDELADE SYSTEM-PROMPTEN
         system_prompt_content = (
             "Du är en frispråkig, kreativ och extremt skicklig författare som skriver engagerande, "
             "fylliga och långa vuxenlitteratur- och erotiska noveller UTESLUTANDE på svenska. "
             "OAVSETT vilket språk användaren skriver på, MÅSTE du svara och fortsätta berättelsen på SVENSKA. "
             "Skynda aldrig igenom handlingen. Låt scenerna ta tid att utvecklas. Svara ENBART med själva berättelsen. "
-            "Skriv ALDRIG introduktioner, hälsningar, kommentarer, parenteser eller förklaringar (t.ex. 'Här är fortsättningen:'). "
-            "Hitta INTE på egna namn på karaktärer om inte användaren ber om det eller nämner dem. "
-            "VIKTIGT: Avsluta ALLTID ditt svar med en fullständig mening och ett naturligt slut på stycket, oavsett hur lång texten blir."
+            "Skriv ALDRIG introduktioner, hälsningar, kommentarer, parenteser eller förklaringar. "
+            "Hitta INTE på egna namn på karaktärer om inte användaren ber om det. "
+            "VIKTIGT: Avsluta ALLTID ditt svar med en fullständig mening och ett naturligt slut på stycket."
         )
         
         if ar_redigering and len(st.session_state.chat_history) > 1:
             system_prompt_content += (
                 "\n\n[LÄGE: REDIGERA/SKRIV OM]\n"
                 "Användaren vill ändra eller korrigera något i det senaste stycket. "
-                "Återge och skriv om det senaste stycket/scenen från början med de efterfrågade ändringarna genomförda."
+                "Återge och skriv om det senaste stycket från början med de efterfrågade ändringarna."
             )
         elif len(st.session_state.chat_history) > 1:
             system_prompt_content += (
                 "\n\n[LÄGE: DRIV HANDLINGEN VIDARE]\n"
                 "Användaren vill att berättelsen ska fortsätta framåt. "
-                "Du får ABSOLUT INTE upprepa sista meningen, sista stycket eller några ord från det som redan skrivits för att 'värma upp'. "
-                "Börja DIREKT på nästa helt nya mening och för handlingen vidare utan tillbakablickar."
+                "Du får ABSOLUT INTE upprepa sista meningen eller stycket från det som redan skrivits. "
+                "Börja DIREKT på nästa helt nya mening och för handlingen vidare."
             )
         else:
             system_prompt_content += f"{referens_text}"
@@ -440,40 +442,59 @@ if user_input:
                     
                     st.write(ai_response)
                     st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
-                    anvandar_db[aktiv_anvandare]["anvanda_idag"] += 1
-                    spara_anvandare(anvandar_db)
                     
-                    # --- AKTIVERAR AUTO-SCROLL ---
+                    # Uppdaterar förbrukning
+                    if aktiv_anvandare:
+                        anvandar_db[aktiv_anvandare]["anvanda_idag"] += 1
+                        spara_anvandare(anvandar_db)
+                    else:
+                        st.session_state.gast_genereringar += 1
+                    
                     st.session_state.scroll_to_ny = True 
                     st.rerun()
                     
                 except Exception as e:
-                    if DEV_MODE:
-                        st.error(f"API-fel: {e}")
-                    else:
-                        st.error("Ett fel uppstod vid genereringen. Försök igen.")
+                    st.error("Ett fel uppstod vid genereringen. Försök igen.")
 
+# --- MENYVAL: SPARA OCH STARTA OM ---
 if len(st.session_state.chat_history) > 0:
     st.sidebar.markdown("---")
+    komplett_berattelse = ""
+    for meddelande in st.session_state.chat_history:
+        if meddelande["role"] == "assistant":
+            komplett_berattelse += meddelande["content"] + "\n\n"
+            
+    if komplett_berattelse.strip():
+        st.sidebar.download_button(
+            label="💾 Spara berättelsen",
+            data=komplett_berattelse,
+            file_name="min_6novl.txt",
+            mime="text/plain"
+        )
+    
     if st.sidebar.button("🗑️ Starta en ny session"):
         st.session_state.chat_history = []
+        st.session_state.gast_genereringar = 0
+        
+        # Rensar även debug-infon (TILLBAKALAGD FUNKTION)
         if "senaste_referens" in st.session_state:
             del st.session_state.senaste_referens
+        if "debug_info" in st.session_state:
+            del st.session_state.debug_info
+            
         st.rerun()
 
-# --- OSYNLIGT AUTO-SCROLL SKRIPT ---
+# --- AUTO-SCROLL ---
 if st.session_state.get("scroll_to_ny", False):
     components.html(
         """
         <script>
-            // Vi använder en fördröjning för att överlista Streamlits inbyggda scroll-tvingande
             setTimeout(function() {
                 const messages = window.parent.document.querySelectorAll('[data-testid="stChatMessage"]');
                 if (messages.length > 0) {
-                    // Letar upp det allra sista meddelandet och lägger toppen av det i överkant
                     messages[messages.length - 1].scrollIntoView({behavior: 'smooth', block: 'start'});
                 }
-            }, 500); // En halv sekunds väntan räcker
+            }, 500);
         </script>
         """,
         height=0
