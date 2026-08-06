@@ -312,15 +312,15 @@ if not aktiv_anvandare and st.session_state.gast_genereringar >= 1:
 # OM ANVÄNDAREN FÅR SKRIVA (GÄST MED 0 UTNYTTJAT ELLER INLOGGAD ANVÄNDARE)
 else:
     if len(st.session_state.chat_history) == 0:
-        st.write("Beskriv en scen, en stämning eller en karaktär nedan för att påbörja berättelsen.")
         with st.form(key="start_scen_form"):
+            st.write("**Sätt scenen för din novell:**")
             user_input_raw = st.text_area(
-                "Vad vill du skriva om?", 
-                placeholder="Beskriv din vision (t.ex. 'Ett intensivt och oväntat möte i ett regnigt Stockholm')...",
-                height=150,
+                "Startscen", 
+                placeholder="T.ex. Ett oväntat möte på tåget, en blick i en fullsatt bar, två kollegor som blir kvar sent på kontoret, eller spänningen i ett förbud...",
+                height=130,
                 label_visibility="collapsed"
             )
-            skapa_knapp = st.form_submit_button("Påbörja berättelsen 💋")
+            skapa_knapp = st.form_submit_button("Börja berättelsen 💋")
             if skapa_knapp and user_input_raw.strip():
                 user_input = user_input_raw.strip()
     else:
