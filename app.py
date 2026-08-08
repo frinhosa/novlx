@@ -167,40 +167,44 @@ with st.sidebar:
         with st.expander("🔑 Logga in / Skapa konto"):
             tab1, tab2 = st.tabs(["Logga in", "Skapa konto"])
             with tab1:
-                anvandarnamn = st.text_input("Användarnamn", key="sidebar_login_user").strip().lower()
-                losenord = st.text_input("Lösenord", type="password", key="sidebar_login_pass")
-                if st.button("Logga in", key="btn_login"):
-                    if anvandarnamn == "admin":
-                        if "ADMIN_PASSWORD" in st.secrets and losenord == st.secrets["ADMIN_PASSWORD"]:
-                            st.session_state.inloggad_anvandare = "admin"
+                with st.form("sidebar_login_form"):
+                    anvandarnamn = st.text_input("Användarnamn", key="sidebar_login_user").strip().lower()
+                    losenord = st.text_input("Lösenord", type="password", key="sidebar_login_pass")
+                    btn_login = st.form_submit_button("Logga in")
+                    if btn_login:
+                        if anvandarnamn == "admin":
+                            if "ADMIN_PASSWORD" in st.secrets and losenord == st.secrets["ADMIN_PASSWORD"]:
+                                st.session_state.inloggad_anvandare = "admin"
+                                st.rerun()
+                            else:
+                                st.error("Fel lösenord.")
+                        elif anvandarnamn in anvandar_db and anvandar_db[anvandarnamn].get("losenord") == losenord:
+                            st.session_state.inloggad_anvandare = anvandarnamn
                             st.rerun()
                         else:
-                            st.error("Fel lösenord.")
-                    elif anvandarnamn in anvandar_db and anvandar_db[anvandarnamn].get("losenord") == losenord:
-                        st.session_state.inloggad_anvandare = anvandarnamn
-                        st.rerun()
-                    else:
-                        st.error("Fel användarnamn eller lösenord.")
+                            st.error("Fel användarnamn eller lösenord.")
             with tab2:
-                ny_anvandare = st.text_input("Välj användarnamn", key="sidebar_reg_user").strip().lower()
-                nytt_losenord = st.text_input("Välj lösenord", type="password", key="sidebar_reg_pass")
-                if st.button("Skapa konto", key="btn_reg"):
-                    if not ny_anvandare or not nytt_losenord:
-                        st.warning("Fyll i alla fält.")
-                    elif ny_anvandare in anvandar_db or ny_anvandare == "admin":
-                        st.error("Användarnamnet är upptaget.")
-                    else:
-                        anvandar_db[ny_anvandare] = {
-                            "losenord": nytt_losenord,
-                            "max_kvot": 20,
-                            "anvanda_idag": 0,
-                            "senaste_datum": str(date.today()),
-                            "godkand": True
-                        }
-                        spara_anvandare(anvandar_db)
-                        skicka_telegram_notis(ny_anvandare)
-                        st.session_state.inloggad_anvandare = ny_anvandare
-                        st.rerun()
+                with st.form("sidebar_reg_form"):
+                    ny_anvandare = st.text_input("Välj användarnamn", key="sidebar_reg_user").strip().lower()
+                    nytt_losenord = st.text_input("Välj lösenord", type="password", key="sidebar_reg_pass")
+                    btn_reg = st.form_submit_button("Skapa konto")
+                    if btn_reg:
+                        if not ny_anvandare or not nytt_losenord:
+                            st.warning("Fyll i alla fält.")
+                        elif ny_anvandare in anvandar_db or ny_anvandare == "admin":
+                            st.error("Användarnamnet är upptaget.")
+                        else:
+                            anvandar_db[ny_anvandare] = {
+                                "losenord": nytt_losenord,
+                                "max_kvot": 20,
+                                "anvanda_idag": 0,
+                                "senaste_datum": str(date.today()),
+                                "godkand": True
+                            }
+                            spara_anvandare(anvandar_db)
+                            skicka_telegram_notis(ny_anvandare)
+                            st.session_state.inloggad_anvandare = ny_anvandare
+                            st.rerun()
 
     st.markdown("---")
     st.caption("📧 Kontakt: 6novl@proton.me")
@@ -273,41 +277,44 @@ if not aktiv_anvandare and st.session_state.gast_genereringar >= 1:
     
     t1, t2 = st.tabs(["Skapa konto (Snabbast)", "Logga in"])
     with t1:
-        u_reg = st.text_input("Användarnamn", key="main_reg_user").strip().lower()
-        p_reg = st.text_input("Lösenord", type="password", key="main_reg_pass")
-        if st.button("Skapa konto & Fortsätt 💋", key="main_reg_btn"):
-            if not u_reg or not p_reg:
-                st.warning("Fyll i både användarnamn och lösenord.")
-            elif u_reg in anvandar_db or u_reg == "admin":
-                st.error("Namnet är upptaget.")
-            else:
-                anvandar_db[u_reg] = {
-                    "losenord": p_reg,
-                    "max_kvot": 20,
-                    "anvanda_idag": 0,
-                    "senaste_datum": str(date.today()),
-                    "godkand": True
-                }
-                spara_anvandare(anvandar_db)
-                skicka_telegram_notis(u_reg)
-                st.session_state.inloggad_anvandare = u_reg
-                st.success("Konto skapat! Du är nu inloggad.")
-                st.rerun()
+        with st.form("main_reg_form"):
+            u_reg = st.text_input("Användarnamn", key="main_reg_user").strip().lower()
+            p_reg = st.text_input("Lösenord", type="password", key="main_reg_pass")
+            main_reg_btn = st.form_submit_button("Skapa konto & Fortsätt 💋")
+            if main_reg_btn:
+                if not u_reg or not p_reg:
+                    st.warning("Fyll i både användarnamn och lösenord.")
+                elif u_reg in anvandar_db or u_reg == "admin":
+                    st.error("Namnet är upptaget.")
+                else:
+                    anvandar_db[u_reg] = {
+                        "losenord": p_reg,
+                        "max_kvot": 20,
+                        "anvanda_idag": 0,
+                        "senaste_datum": str(date.today()),
+                        "godkand": True
+                    }
+                    spara_anvandare(anvandar_db)
+                    skicka_telegram_notis(u_reg)
+                    st.session_state.inloggad_anvandare = u_reg
+                    st.rerun()
     with t2:
-        u_log = st.text_input("Användarnamn", key="main_log_user").strip().lower()
-        p_log = st.text_input("Lösenord", type="password", key="main_log_pass")
-        if st.button("Logga in & Fortsätt", key="main_log_btn"):
-            if u_log == "admin":
-                if "ADMIN_PASSWORD" in st.secrets and p_log == st.secrets["ADMIN_PASSWORD"]:
-                    st.session_state.inloggad_anvandare = "admin"
+        with st.form("main_log_form"):
+            u_log = st.text_input("Användarnamn", key="main_log_user").strip().lower()
+            p_log = st.text_input("Lösenord", type="password", key="main_log_pass")
+            main_log_btn = st.form_submit_button("Logga in & Fortsätt")
+            if main_log_btn:
+                if u_log == "admin":
+                    if "ADMIN_PASSWORD" in st.secrets and p_log == st.secrets["ADMIN_PASSWORD"]:
+                        st.session_state.inloggad_anvandare = "admin"
+                        st.rerun()
+                    else:
+                        st.error("Fel administratörslösenord.")
+                elif u_log in anvandar_db and anvandar_db[u_log].get("losenord") == p_log:
+                    st.session_state.inloggad_anvandare = u_log
                     st.rerun()
                 else:
-                    st.error("Fel administratörslösenord.")
-            elif u_log in anvandar_db and anvandar_db[u_log].get("losenord") == p_log:
-                st.session_state.inloggad_anvandare = u_log
-                st.rerun()
-            else:
-                st.error("Fel användarnamn eller lösenord.")
+                    st.error("Fel användarnamn eller lösenord.")
 
 # OM ANVÄNDAREN FÅR SKRIVA (GÄST MED 0 UTNYTTJAT ELLER INLOGGAD ANVÄNDARE)
 else:
