@@ -41,6 +41,21 @@ components.html(
     height=0
 )
 
+# --- ENHETSSTÄMPEL (LOCALSTORAGE KONTROLL) ---
+components.html(
+    """
+    <script>
+        const params = new URLSearchParams(window.parent.location.search);
+        const hasRegistered = window.parent.localStorage.getItem('6novl_has_registered');
+        if (hasRegistered === '1' && params.get('has_reg') !== '1') {
+            params.set('has_reg', '1');
+            window.parent.location.search = params.toString();
+        }
+    </script>
+    """,
+    height=0
+)
+
 # --- DESIGN & CSS ---
 st.markdown("""
     <style>
@@ -52,6 +67,7 @@ st.markdown("""
 
 # --- INSTÄLLNINGAR ---
 DEV_MODE = True
+BETA_KOD = "6NOVL"
 FILNAMN = "kategoriserade_berattelser.json"
 ZIP_FILNAMN = "kategoriserade_berattelser.zip"
 ZIP_URL = "https://github.com/frinhosa/novlx/releases/download/1.0/kategoriserade_berattelser.zip"
@@ -113,7 +129,7 @@ def spara_anvandare(data):
 
 anvandar_db = ladda_anvandare()
 
-# --- INITIERA SESSION STATE ---
+# --- INITIERA SESSION STATE OCH STÄMPELKONTROLL ---
 if "inloggad_anvandare" not in st.session_state:
     st.session_state.inloggad_anvandare = None
 
@@ -123,6 +139,7 @@ if "gast_genereringar" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+har_skapat_konto_pa_enhet = st.query_params.get("has_reg") == "1"
 aktiv_anvandare = st.session_state.inloggad_anvandare
 dagens_datum = str(date.today())
 
@@ -138,6 +155,18 @@ if aktiv_anvandare:
 else:
     anvanda_tokens = st.session_state.gast_genereringar
     max_kvot = 1  # Gäster får exakt 1 fri generering
+
+# --- HELPER FÖR ENHETSSTÄMPLING ---
+def stang_enhet_for_ny_registrering():
+    st.query_params["has_reg"] = "1"
+    components.html(
+        """
+        <script>
+            window.parent.localStorage.setItem('6novl_has_registered', '1');
+        </script>
+        """,
+        height=0
+    )
 
 # --- SIDOMENY OCH GÄST-INLOGG ---
 with st.sidebar:
@@ -184,27 +213,34 @@ with st.sidebar:
                         else:
                             st.error("Fel användarnamn eller lösenord.")
             with tab2:
-                with st.form("sidebar_reg_form"):
-                    ny_anvandare = st.text_input("Välj användarnamn", key="sidebar_reg_user").strip().lower()
-                    nytt_losenord = st.text_input("Välj lösenord", type="password", key="sidebar_reg_pass")
-                    btn_reg = st.form_submit_button("Skapa konto")
-                    if btn_reg:
-                        if not ny_anvandare or not nytt_losenord:
-                            st.warning("Fyll i alla fält.")
-                        elif ny_anvandare in anvandar_db or ny_anvandare == "admin":
-                            st.error("Användarnamnet är upptaget.")
-                        else:
-                            anvandar_db[ny_anvandare] = {
-                                "losenord": nytt_losenord,
-                                "max_kvot": 20,
-                                "anvanda_idag": 0,
-                                "senaste_datum": str(date.today()),
-                                "godkand": True
-                            }
-                            spara_anvandare(anvandar_db)
-                            skicka_telegram_notis(ny_anvandare)
-                            st.session_state.inloggad_anvandare = ny_anvandare
-                            st.rerun()
+                if har_skapat_konto_pa_enhet:
+                    st.error("🛑 Ett konto har redan skapats från den här enheten. Logga in istället.")
+                else:
+                    with st.form("sidebar_reg_form"):
+                        ny_anvandare = st.text_input("Välj användarnamn", key="sidebar_reg_user").strip().lower()
+                        nytt_losenord = st.text_input("Välj lösenord", type="password", key="sidebar_reg_pass")
+                        kod_input = st.text_input(f"Betakod (skriv {BETA_KOD})", key="sidebar_reg_kod").strip().upper()
+                        btn_reg = st.form_submit_button("Skapa konto")
+                        if btn_reg:
+                            if not ny_anvandare or not nytt_losenord or not kod_input:
+                                st.warning("Fyll i alla fält.")
+                            elif kod_input != BETA_KOD:
+                                st.error("Felaktig betakod.")
+                            elif ny_anvandare in anvandar_db or ny_anvandare == "admin":
+                                st.error("Användarnamnet är upptaget.")
+                            else:
+                                anvandar_db[ny_anvandare] = {
+                                    "losenord": nytt_losenord,
+                                    "max_kvot": 20,
+                                    "anvanda_idag": 0,
+                                    "senaste_datum": str(date.today()),
+                                    "godkand": True
+                                }
+                                spara_anvandare(anvandar_db)
+                                skicka_telegram_notis(ny_anvandare)
+                                stang_enhet_for_ny_registrering()
+                                st.session_state.inloggad_anvandare = ny_anvandare
+                                st.rerun()
 
     st.markdown("---")
     st.caption("📧 Kontakt: 6novl@proton.me")
@@ -277,27 +313,34 @@ if not aktiv_anvandare and st.session_state.gast_genereringar >= 1:
     
     t1, t2 = st.tabs(["Skapa konto (Snabbast)", "Logga in"])
     with t1:
-        with st.form("main_reg_form"):
-            u_reg = st.text_input("Användarnamn", key="main_reg_user").strip().lower()
-            p_reg = st.text_input("Lösenord", type="password", key="main_reg_pass")
-            main_reg_btn = st.form_submit_button("Skapa konto & Fortsätt 💋")
-            if main_reg_btn:
-                if not u_reg or not p_reg:
-                    st.warning("Fyll i både användarnamn och lösenord.")
-                elif u_reg in anvandar_db or u_reg == "admin":
-                    st.error("Namnet är upptaget.")
-                else:
-                    anvandar_db[u_reg] = {
-                        "losenord": p_reg,
-                        "max_kvot": 20,
-                        "anvanda_idag": 0,
-                        "senaste_datum": str(date.today()),
-                        "godkand": True
-                    }
-                    spara_anvandare(anvandar_db)
-                    skicka_telegram_notis(u_reg)
-                    st.session_state.inloggad_anvandare = u_reg
-                    st.rerun()
+        if har_skapat_konto_pa_enhet:
+            st.error("🛑 Ett konto har redan skapats från den här enheten. Logga in istället för att fortsätta.")
+        else:
+            with st.form("main_reg_form"):
+                u_reg = st.text_input("Användarnamn", key="main_reg_user").strip().lower()
+                p_reg = st.text_input("Lösenord", type="password", key="main_reg_pass")
+                k_reg = st.text_input(f"Betakod (skriv {BETA_KOD})", key="main_reg_kod").strip().upper()
+                main_reg_btn = st.form_submit_button("Skapa konto & Fortsätt 💋")
+                if main_reg_btn:
+                    if not u_reg or not p_reg or not k_reg:
+                        st.warning("Fyll i alla fält.")
+                    elif k_reg != BETA_KOD:
+                        st.error("Felaktig betakod.")
+                    elif u_reg in anvandar_db or u_reg == "admin":
+                        st.error("Namnet är upptaget.")
+                    else:
+                        anvandar_db[u_reg] = {
+                            "losenord": p_reg,
+                            "max_kvot": 20,
+                            "anvanda_idag": 0,
+                            "senaste_datum": str(date.today()),
+                            "godkand": True
+                        }
+                        spara_anvandare(anvandar_db)
+                        skicka_telegram_notis(u_reg)
+                        stang_enhet_for_ny_registrering()
+                        st.session_state.inloggad_anvandare = u_reg
+                        st.rerun()
     with t2:
         with st.form("main_log_form"):
             u_log = st.text_input("Användarnamn", key="main_log_user").strip().lower()
@@ -383,8 +426,14 @@ if user_input:
         st.error("🛑 Du har nått din kvot för idag. Kom tillbaka imorgon!")
     else:
         kommando = user_input.strip().lower()
+        
+        # Känner av redigering
         redigerings_ord = ["ändra", "byt", "skriv om", "gör om", "korrigera", "istället", "byta"]
         ar_redigering = any(ord in kommando for ord in redigerings_ord)
+        
+        # Känner av rena fortsättningskommandon ("fortsätt", "mer", "vidare" etc.)
+        fortsattnings_ord = ["fortsätt", "mer", "vidare", "sen då", "vad händer sen", "fortsätt berätta", "kör vidare"]
+        ar_fortsattning = any(ord == kommando or kommando.startswith(ord) for ord in fortsattnings_ord) or (len(kommando.split()) <= 3 and any(ord in kommando for ord in fortsattnings_ord))
         
         with st.chat_message("user", avatar="🖋️"):
             st.write(user_input)
@@ -422,12 +471,34 @@ if user_input:
                 "Återge och skriv om det senaste stycket från början med de efterfrågade ändringarna."
             )
         elif len(st.session_state.chat_history) > 1:
-            system_prompt_content += (
-                "\n\n[LÄGE: DRIV HANDLINGEN VIDARE]\n"
-                "Användaren vill att berättelsen ska fortsätta framåt. "
-                "Du får ABSOLUT INTE upprepa sista meningen eller stycket från det som redan skrivits. "
-                "Börja DIREKT på nästa helt nya mening och för handlingen vidare."
-            )
+            # Hitta det senaste svaret från AI:n för att plocka ut sista meningen som en "stopplinje"
+            senaste_ai_meddelande = ""
+            for msg in reversed(st.session_state.chat_history[:-1]):
+                if msg["role"] == "assistant":
+                    senaste_ai_meddelande = msg["content"].strip()
+                    break
+            
+            sista_meningen = ""
+            if senaste_ai_meddelande:
+                meningar = [m.strip() for m in re.split(r'(?<=[.!?])\s+', senaste_ai_meddelande) if m.strip()]
+                if meningar:
+                    sista_meningen = meningar[-1]
+            
+            if ar_fortsattning and sista_meningen:
+                system_prompt_content += (
+                    f"\n\n[LÄGE: DRIV HANDLINGEN VIDARE - SÄKERHETSKONTROLL FORTSÄTTNING]\n"
+                    f"Användaren bad dig bara fortsätta ('{user_input}').\n"
+                    f"Din förra text avslutades med följande mening: \"{sista_meningen}\"\n"
+                    f"ABSOLUT FÖRBUD: Du får INTE upprepa, omformulera eller inleda ditt svar med den meningen eller det sista stycket. "
+                    f"Börja DIREKT på nästa helt nya händelse eller mening och för handlingen framåt."
+                )
+            else:
+                system_prompt_content += (
+                    "\n\n[LÄGE: DRIV HANDLINGEN VIDARE]\n"
+                    "Användaren vill att berättelsen ska fortsätta framåt. "
+                    "Du får ABSOLUT INTE upprepa sista meningen eller stycket från det som redan skrivits. "
+                    "Börja DIREKT på nästa helt nya mening och för handlingen vidare."
+                )
         else:
             system_prompt_content += f"{referens_text}"
             
