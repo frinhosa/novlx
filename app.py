@@ -9,7 +9,7 @@ import zipfile
 import urllib.request
 import shutil
 import requests
-from datetime import date
+from datetime import date, datetime
 from openai import OpenAI
 
 # --- 1. SÄTTER IKON OCH NAMN DIREKT I KÄRNAN ---
@@ -439,6 +439,18 @@ if user_input:
             st.write(user_input)
             
         st.session_state.chat_history.append({"role": "user", "content": user_input})
+        
+        # --- LOGGA ANVÄNDARENS INMATNING I JSON ---
+        if aktiv_anvandare and aktiv_anvandare != "admin":
+            if "inmatningar" not in anvandar_db[aktiv_anvandare]:
+                anvandar_db[aktiv_anvandare]["inmatningar"] = []
+            
+            anvandar_db[aktiv_anvandare]["inmatningar"].append({
+                "tid": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "text": user_input
+            })
+            spara_anvandare(anvandar_db)
+        # ------------------------------------------
         
         referens_text = ""
         if len(st.session_state.chat_history) == 1:
