@@ -185,6 +185,20 @@ with st.sidebar:
                     del anvandar_db[anvandare_att_radera]
                     spara_anvandare(anvandar_db)
                     st.rerun()
+            
+            st.markdown("---")
+            st.subheader("📥 Ladda ner databas")
+            try:
+                with open(ANVANDAR_FIL, "r", encoding="utf-8") as f:
+                    json_data = f.read()
+                st.download_button(
+                    label="Ladda ner anvandare.json",
+                    data=json_data,
+                    file_name="anvandare_aktiv.json",
+                    mime="application/json"
+                )
+            except Exception as e:
+                st.error("Kunde inte läsa databasfilen.")
                     
         if st.button("Logga ut"):
             st.session_state.inloggad_anvandare = None
