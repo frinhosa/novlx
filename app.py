@@ -67,7 +67,7 @@ st.markdown("""
 
 # --- INSTÄLLNINGAR ---
 DEV_MODE = True
-BETA_KOD = "6NOVL"
+BETA_KOD = "HEMLIGT2026"
 FILNAMN = "kategoriserade_berattelser.json"
 ZIP_FILNAMN = "kategoriserade_berattelser.zip"
 ZIP_URL = "https://github.com/frinhosa/novlx/releases/download/1.0/kategoriserade_berattelser.zip"
