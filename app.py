@@ -67,7 +67,7 @@ st.markdown("""
 
 # --- INSTÄLLNINGAR ---
 DEV_MODE = True
-BETA_KOD = "HEMLIGT2026"
+BETA_KOD = "BETAKOD"
 FILNAMN = "kategoriserade_berattelser.json"
 ZIP_FILNAMN = "kategoriserade_berattelser.zip"
 ZIP_URL = "https://github.com/frinhosa/novlx/releases/download/1.0/kategoriserade_berattelser.zip"
@@ -233,7 +233,7 @@ with st.sidebar:
                     with st.form("sidebar_reg_form"):
                         ny_anvandare = st.text_input("Välj användarnamn", key="sidebar_reg_user").strip().lower()
                         nytt_losenord = st.text_input("Välj lösenord", type="password", key="sidebar_reg_pass")
-                        kod_input = st.text_input(f"Betakod (skriv {BETA_KOD})", key="sidebar_reg_kod").strip().upper()
+                        kod_input = st.text_input("Betakod", key="sidebar_reg_kod").strip().upper()
                         btn_reg = st.form_submit_button("Skapa konto")
                         if btn_reg:
                             if not ny_anvandare or not nytt_losenord or not kod_input:
@@ -333,7 +333,7 @@ if not aktiv_anvandare and st.session_state.gast_genereringar >= 1:
             with st.form("main_reg_form"):
                 u_reg = st.text_input("Användarnamn", key="main_reg_user").strip().lower()
                 p_reg = st.text_input("Lösenord", type="password", key="main_reg_pass")
-                k_reg = st.text_input(f"Betakod (skriv {BETA_KOD})", key="main_reg_kod").strip().upper()
+                k_reg = st.text_input("Betakod", key="main_reg_kod").strip().upper()
                 main_reg_btn = st.form_submit_button("Skapa konto & Fortsätt 💋")
                 if main_reg_btn:
                     if not u_reg or not p_reg or not k_reg:
