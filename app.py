@@ -562,7 +562,10 @@ if user_input:
                     st.rerun()
                     
                 except Exception as e:
-                    st.error("Ett fel uppstod vid genereringen. Försök igen.")
+                    if aktiv_anvandare == "admin":
+                        st.error(f"Ett fel uppstod vid genereringen. Försök igen. (Felkod: {e})")
+                    else:
+                        st.error("Ett fel uppstod vid genereringen. Försök igen.")
 
 # --- MENYVAL: SPARA OCH STARTA OM ---
 if len(st.session_state.chat_history) > 0:
